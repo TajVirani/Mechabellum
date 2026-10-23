@@ -14,7 +14,7 @@ def load_artifact(model_path: Path) -> dict[str, Any]:
 
 def predict_snapshot(artifact: dict[str, Any], snapshot: MatchSnapshot, model_path: Path) -> dict[str, Any]:
     if len(snapshot.players) != 2:
-        raise ValueError("胜率预测器支持 1v1 局面。")
+        raise ValueError("The win predictor only supports 1v1 positions.")
 
     model = artifact["model"]
     raw = [float(model.predict_proba(build_features(snapshot, index).reshape(1, -1))[0, 1]) for index in (0, 1)]
@@ -37,5 +37,5 @@ def predict_snapshot(artifact: dict[str, Any], snapshot: MatchSnapshot, model_pa
         "model": str(model_path.resolve()),
     }
     if snapshot.match.phase != "battle_start":
-        result["warning"] = f"输入阶段为 {snapshot.match.phase}，模型训练阶段为 battle_start。"
+        result["warning"] = f"Input phase is {snapshot.match.phase}; the model was trained on battle_start."
     return result

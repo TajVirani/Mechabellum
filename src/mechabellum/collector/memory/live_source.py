@@ -57,17 +57,17 @@ class LiveMemorySource:
     @classmethod
     def attach(cls) -> LiveMemorySource:
         if os.name != "nt":
-            raise OSError("实时内存数据源支持 Windows。")
+            raise OSError("The live memory source only supports Windows.")
         process_id = find_process_id("Mechabellum.exe")
         if process_id is None:
-            raise RuntimeError("Mechabellum 尚未运行。")
+            raise RuntimeError("Mechabellum is not running.")
         module = find_module(process_id, "GameAssembly.dll")
         if module is None:
-            raise RuntimeError("运行中的进程没有加载 GameAssembly.dll。")
+            raise RuntimeError("The running process has not loaded GameAssembly.dll.")
         digest = hashlib.sha256(module.path.read_bytes()).hexdigest().upper()
         layout = SUPPORTED_LAYOUT
         if digest != layout.game_assembly_sha256:
-            raise RuntimeError(f"GameAssembly.dll 尚未适配（SHA256={digest}）。")
+            raise RuntimeError(f"GameAssembly.dll build is not supported (SHA256={digest}).")
         return cls(process_id, WindowsProcessMemory(process_id), module.base_address, layout)
 
     def get_status(self) -> MemoryStatus:
@@ -87,11 +87,11 @@ class LiveMemorySource:
         battle_info = self._memory.read_pointer(match + 0x30)
         player_manager = self._memory.read_pointer(match + 0x70)
         if player_manager == 0:
-            raise ObserverStateError("对局尚未完成玩家数据初始化。")
+            raise ObserverStateError("The match has not finished initializing player data.")
         controllers_list = self._memory.read_pointer(player_manager + 0x18)
         controllers = self._memory.read_list_pointers(controllers_list, 8)
         if len(controllers) < 2:
-            raise ObserverStateError(f"只找到 {len(controllers)} 名玩家，对局快照仍在加载。")
+            raise ObserverStateError(f"Only found {len(controllers)} player(s); the match snapshot is still loading.")
         players = [self._read_player(controller) for controller in controllers if controller != 0]
         return MatchSnapshot(
             game_build=GameBuild(
@@ -123,20 +123,20 @@ class LiveMemorySource:
             self._game_assembly_base + self._layout.match_client_class_global_rva
         )
         if match_client_class == 0 or self._memory.read_class_name(match_client_class) != "MatchClient":
-            raise ValueError("版本布局校验失败：MatchClient 类型根指针无效。")
+            raise ValueError("Layout validation failed: invalid MatchClient class root pointer.")
         static_fields = self._memory.read_pointer(match_client_class + 0xB8)
         current_match = 0 if static_fields == 0 else self._memory.read_pointer(static_fields + 0x08)
         if current_match == 0:
-            raise ObserverStateError("没有正在运行的对局。")
+            raise ObserverStateError("No match is currently running.")
         match_type = self._memory.read_object_class_name(current_match)
         if not match_type:
-            raise ValueError("无法识别对局的 IL2CPP 类型。")
+            raise ValueError("Could not identify the IL2CPP type of the match.")
         return current_match, match_type
 
     def _read_player(self, controller: int) -> PlayerSnapshot:
         player = self._memory.read_pointer(controller + 0x128)
         if player == 0:
-            raise ValueError("PlayerController 中的 Player 指针为空。")
+            raise ValueError("The Player pointer in PlayerController is null.")
         player_id = self._memory.read_uint64(player + 0x18)
         risk_info = self._memory.read_pointer(player + 0x28)
         name = (

@@ -95,7 +95,7 @@ class MatchSnapshot(ContractModel):
     @model_validator(mode="after")
     def validate_outcome_index(self) -> MatchSnapshot:
         if self.outcome is not None and self.outcome.winner_index >= len(self.players):
-            raise ValueError("outcome.winnerIndex 超出 players 范围。")
+            raise ValueError("outcome.winnerIndex is out of range for players.")
         return self
 
 
@@ -126,7 +126,7 @@ def locate_schema() -> Path:
         path = Path(configured)
         if path.is_file():
             return path
-        raise FileNotFoundError(f"MECHABELLUM_MATCH_SNAPSHOT_SCHEMA 指向的文件不存在：{path}")
+        raise FileNotFoundError(f"File pointed to by MECHABELLUM_MATCH_SNAPSHOT_SCHEMA does not exist: {path}")
 
     relative = Path("contracts/match-snapshot/v1/schema.json")
     candidates = [
@@ -137,7 +137,7 @@ def locate_schema() -> Path:
     for candidate in candidates:
         if candidate.is_file():
             return candidate
-    raise FileNotFoundError("没有找到 contracts/match-snapshot/v1/schema.json。")
+    raise FileNotFoundError("Could not find contracts/match-snapshot/v1/schema.json.")
 
 
 @lru_cache(maxsize=8)

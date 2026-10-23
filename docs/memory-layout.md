@@ -1,24 +1,24 @@
-# 实时对局内存布局
+# Live match memory layout
 
-实时采集由 `src/mechabellum/collector/memory/` 实现。`windows_process.py` 封装进程与模块枚举、`OpenProcess`、`ReadProcessMemory` 和 `CloseHandle`；`il2cpp_reader.py` 读取指针、值类型、字符串、列表和类型信息；`layouts.py` 保存构建绑定的地址与字段偏移；`live_source.py` 将对象图转换为 `MatchSnapshot v1`。
+Live collection is implemented in `src/mechabellum/collector/memory/`. `windows_process.py` wraps process and module enumeration, `OpenProcess`, `ReadProcessMemory`, and `CloseHandle`; `il2cpp_reader.py` reads pointers, value types, strings, lists, and type information; `layouts.py` stores build-specific addresses and field offsets; `live_source.py` converts the object graph into `MatchSnapshot v1`.
 
-进程句柄使用以下权限：
+The process handle uses the following access rights:
 
 - `PROCESS_VM_READ` (`0x0010`)
 - `PROCESS_QUERY_INFORMATION` (`0x0400`)
 
-## 支持版本
+## Supported version
 
-| 项目 | 值 |
+| Item | Value |
 | --- | --- |
-| 回放格式 | 2119 |
-| 游戏版本 | 1.11.0.2a |
+| Replay format | 2119 |
+| Game version | 1.11.0.2a |
 | `GameAssembly.dll` SHA256 | `0FE278BC3A1DD6FF55A51DB2807CCD73ED16A1FE390FE72FFA013F0AEFF495F1` |
-| `MatchClient` 类型全局 RVA | `0x3C799F8` |
+| `MatchClient` class global RVA | `0x3C799F8` |
 
-该布局已在实际 `WatchMatch` 中验证双方名称、回合、单位 ID、编队数量、等级、经验、坐标、朝向、补给、核心值和上一回合胜负。
+This layout has been verified in an actual `WatchMatch` for both players' names, round, unit IDs, formation count, levels, experience, coordinates, orientation, supply, core value, and previous round result.
 
-## 根对象
+## Root object
 
 ```text
 GameAssembly + 0x3C799F8
@@ -27,11 +27,11 @@ GameAssembly + 0x3C799F8
   → MatchClient.Current (+0x08)
 ```
 
-`live-probe` 会验证模块哈希、根类型和当前对局对象。大厅中 `MatchClient.Current` 为空；进入可读取的观战或对局后，`live` 从其基类字段读取部署状态。
+`live-probe` verifies the module hash, root type, and current match object. `MatchClient.Current` is null in the lobby; once a readable spectated or played match starts, `live` reads deployment state from its base class fields.
 
-## 主要字段
+## Main fields
 
-| 对象 | 字段 | 偏移 |
+| Object | Field | Offset |
 | --- | --- | ---: |
 | `Match` | `battleInfo` | `0x30` |
 | `Match` | `RoundCount` | `0x64` |
@@ -61,13 +61,13 @@ GameAssembly + 0x3C799F8
 | `MechTeam` | `expFloat` (`FPoint Q32.32`) | `0x38` |
 | `MechTeam` | `roundCount` | `0x50` |
 
-## 构建更新
+## Build updates
 
-`LiveMemorySource.attach()` 会计算 `GameAssembly.dll` SHA256，并只选择完全匹配的布局。适配新构建时，在 `layouts.py` 增加独立布局记录并完成以下验证：
+`LiveMemorySource.attach()` computes the SHA256 of `GameAssembly.dll` and only selects an exactly matching layout. When adapting to a new build, add a separate layout record in `layouts.py` and complete the following checks:
 
-1. `mecha live-probe` 返回 `MatchClient` 根类型和目标布局；
-2. 大厅中的 `Current` 状态为空；
-3. 在观战中核对双方名称、编队数、单位 ID、等级、经济和坐标；
-4. 连续回合的阶段与部署变化能够稳定读取；
-5. 同一对局回放的最终快照与实时输出字段一致；
-6. 内存单元测试和实时集成测试全部通过。
+1. `mecha live-probe` returns the `MatchClient` root type and the target layout;
+2. `Current` is null in the lobby;
+3. While spectating, verify both players' names, formation count, unit IDs, levels, economy, and coordinates;
+4. Phase and deployment changes across consecutive rounds are read reliably;
+5. The final snapshot from the same match's replay matches the live output fields;
+6. Memory unit tests and live integration tests all pass.

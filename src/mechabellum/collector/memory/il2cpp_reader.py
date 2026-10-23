@@ -30,14 +30,14 @@ class Il2CppReader:
         items = self.read_pointer(list_address + 0x10)
         size = self.read_int32(list_address + 0x18)
         if size < 0 or size > maximum_count:
-            raise ValueError(f"IL2CPP List 大小异常：{size}（上限 {maximum_count}）。")
+            raise ValueError(f"Abnormal IL2CPP List size: {size} (limit {maximum_count}).")
         if size == 0:
             return []
         if items == 0:
-            raise ValueError("IL2CPP List 的 items 指针为空。")
+            raise ValueError("The IL2CPP List items pointer is null.")
         capacity = self.read_uint64(items + 0x18)
         if capacity < size or capacity > maximum_count * 16:
-            raise ValueError(f"IL2CPP Array 容量异常：{capacity}，List 大小为 {size}。")
+            raise ValueError(f"Abnormal IL2CPP Array capacity: {capacity}, List size is {size}.")
         return list(struct.unpack(f"<{size}Q", self._memory.read(items + 0x20, size * 8)))
 
     def read_object_class_name(self, object_address: int) -> str:
@@ -52,7 +52,7 @@ class Il2CppReader:
             return None
         length = self.read_int32(address + 0x10)
         if length < 0 or length > 16_384:
-            raise ValueError(f"IL2CPP String 长度异常：{length}。")
+            raise ValueError(f"Abnormal IL2CPP String length: {length}.")
         return "" if length == 0 else self._memory.read(address + 0x14, length * 2).decode("utf-16-le")
 
     def _read_null_terminated_utf8(self, address: int, maximum_bytes: int) -> str:

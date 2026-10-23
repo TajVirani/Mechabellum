@@ -10,7 +10,7 @@ def test_live_root_matches_supported_layout() -> None:
     try:
         source = LiveMemorySource.attach()
     except RuntimeError as error:
-        if "尚未运行" in str(error):
+        if "not running" in str(error):
             pytest.skip("Mechabellum is not running")
         raise
     with source:

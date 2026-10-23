@@ -1,53 +1,53 @@
 # TODO
 
-## P0：观战胜率基线
+## P0: Spectator win probability baseline
 
-- [x] 从 1v1 回放最终 `FightReport` 生成胜者标签
-- [x] 固定 `battle_start` 样本口径并排除 `round 0` 开局选择状态
-- [x] 按整场 `battleId` 隔离训练集与测试集
-- [x] 提取核心、补给、编队、等级、经验、装备、科技和阵型聚合特征
-- [x] 训练双方对称的概率基线并支持 `live-predict` 推理
-- [ ] 累积至少 5,000 场同版本 1v1 并做按时间切分的概率校准
-- [ ] 增加按回合、地图、分段和版本拆分的评估报告
-- [x] 读取实时玩家阶段，并在双方进入 `Fighting` 时每回合预测一次
-- [ ] 增加稳定的 JSONL 实时局面落盘记录器和时间戳
+- [x] Generate winner labels from the final `FightReport` of 1v1 replays
+- [x] Fix the `battle_start` sampling definition and exclude the `round 0` opening selection state
+- [x] Split training and test sets by whole `battleId`
+- [x] Extract aggregate features for core, supply, formations, levels, experience, equipment, technologies, and positioning
+- [x] Train a player-symmetric probability baseline and support `live-predict` inference
+- [ ] Accumulate at least 5,000 same-version 1v1 matches and perform time-split probability calibration
+- [ ] Add evaluation reports broken down by round, map, rank tier, and version
+- [x] Read live player phase and predict once per round when both players enter `Fighting`
+- [ ] Add a stable JSONL recorder for live snapshots, with timestamps
 
-## P1A：完整数据收集
+## P1A: Complete data collection
 
-- [ ] 解析回放 `actionRecords`：购买、解锁、升级、科技、移动、装备与技能
-- [ ] 输出每回合发牌候选 `reinforceItems` 和玩家最终选择 `PAD_ChooseReinforceItem`
-- [ ] 输出开局阵容选择、专家、指挥官技能、商店解锁与建筑状态
-- [ ] 从实时 `ReinforcementManager` 读取本回合候选牌和已选牌
-- [ ] 建立卡牌、科技、装备和专家 ID 名称/费用表
+- [ ] Parse replay `actionRecords`: purchases, unlocks, upgrades, technologies, moves, equipment, and abilities
+- [ ] Output each round's dealt card candidates `reinforceItems` and the player's final choice `PAD_ChooseReinforceItem`
+- [ ] Output opening lineup choice, specialists, commander abilities, shop unlocks, and building state
+- [ ] Read the current round's candidate and chosen cards from the live `ReinforcementManager`
+- [ ] Build ID-to-name/cost tables for cards, technologies, equipment, and specialists
 
-## P1B：完整局面描述
+## P1B: Complete position description
 
-- [ ] 将每个编队表示为独立 token：单位 ID、等级、经验、价值、具体科技、具体装备、精确 X/Y、朝向和阵营
-- [ ] 统一双方坐标方向，以战场中线为基准表达前后深度，并保留左右路位置
-- [ ] 表达单位间相对位置：前后排、邻近距离、保护关系、密度、左右路覆盖和预计接敌顺序
-- [ ] 表达敌我对位与克制交互，而不只统计每种单位的独立数量
-- [ ] 加入双方核心、最大核心、剩余补给、当回合收入、累计投入、解锁状态和未花经济
-- [ ] 加入具体科技、装备、专家、开局阵容、候选发牌、最终选牌和指挥官技能/冷却
-- [ ] 加入防御塔、能源塔、蓝图、装置、建筑和强化状态
-- [ ] 加入上一轮战斗分数、幸存编队、核心伤害、胜负历史和经济/核心变化序列
-- [ ] 加入地图、游戏模式、游戏版本、平衡补丁和可用单位池
-- [ ] 为缺失、未知和版本新增 ID 保留原始值及显式掩码，禁止静默按 0 处理
-- [ ] 先实现固定网格/分区坐标基线，再实现编队 token 的 Deep Sets / Transformer / 图神经网络（GNN）
-- [x] 对基础局面 schema 做版本化，并保证回放训练数据与实时观战快照字段一致
+- [ ] Represent each formation as an independent token: unit ID, level, experience, value, specific technologies, specific equipment, exact X/Y, orientation, and side
+- [ ] Normalize both players' coordinate directions, express front-to-back depth relative to the battlefield midline, and preserve left/right lane position
+- [ ] Express relative positions between units: front/back line, neighbor distance, protection relationships, density, left/right lane coverage, and expected engagement order
+- [ ] Express matchups and counter interactions between opposing units, not just independent per-unit counts
+- [ ] Add both players' core, max core, remaining supply, current round income, cumulative investment, unlock state, and unspent economy
+- [ ] Add specific technologies, equipment, specialists, opening lineup, dealt card candidates, final card choice, and commander abilities/cooldowns
+- [ ] Add towers, energy towers, blueprints, devices, buildings, and enhancement state
+- [ ] Add previous round battle score, surviving formations, core damage, win/loss history, and economy/core change sequences
+- [ ] Add map, game mode, game version, balance patch, and available unit pool
+- [ ] Preserve raw values and explicit masks for missing, unknown, and version-new IDs; never silently treat them as 0
+- [ ] First implement a fixed grid/zone coordinate baseline, then Deep Sets / Transformer / graph neural network (GNN) models over formation tokens
+- [x] Version the base position schema and keep replay training data and live spectator snapshot fields consistent
 
-## P1C：回合价值目标
+## P1C: Round value targets
 
-- [ ] 从 `FightReport.Score`、双方核心变化和幸存编队价值构造标准化的回合优势标签
-- [ ] 将最终胜负作为主目标，将每回合净核心伤害/净胜血量作为辅助回归或排序目标，训练多任务局面价值模型
-- [ ] 为行动推荐定义“终局胜负主奖励 + 折扣回合优势辅助奖励”，对回合奖励归一化和裁剪，避免局部大胜掩盖最终失败
-- [ ] 通过消融实验比较仅最终胜负、加入回合优势和不同奖励权重对概率校准及行动排序的影响
+- [ ] Construct normalized round advantage labels from `FightReport.Score`, both players' core changes, and surviving formation value
+- [ ] Use final win/loss as the primary target and per-round net core damage / net HP won as auxiliary regression or ranking targets to train a multi-task position value model
+- [ ] Define "final win/loss primary reward + discounted round advantage auxiliary reward" for action recommendation; normalize and clip round rewards so large local wins do not mask a final loss
+- [ ] Use ablation experiments to compare the effect of final win/loss only, adding round advantage, and different reward weights on probability calibration and action ranking
 
-## P2：行动推荐与自博弈
+## P2: Action recommendation and self-play
 
-- [ ] 在胜率模型之上实现候选购买、升级、科技和部署行动排序
-- [ ] 研究 `ReplaySimulateMatch` / `ReplayAIMatch` 能否自定义局面、无画面加速和批量运行
-- [ ] 如果内部模拟入口可用，封装 AI 对 AI 自博弈环境
-- [ ] 实现可复现的批量 AI 对 AI 对局与 `.grbr` 录像生成器，记录随机种子、双方策略版本、游戏构建和完整结果
-- [ ] 为自动生成数据建立版本索引、去重、异常局过滤和分布统计，并使用仅含真实玩家回放的测试集评估泛化能力
-- [ ] 研究真实回放与自博弈数据的采样比例、样本权重和课程学习策略
-- [ ] 用真实回放持续校准模拟环境，避免只在近似模拟器中有效
+- [ ] Implement ranking of candidate purchase, upgrade, technology, and deployment actions on top of the win probability model
+- [ ] Investigate whether `ReplaySimulateMatch` / `ReplayAIMatch` can customize positions, run headless at accelerated speed, and run in batches
+- [ ] If an internal simulation entry point is available, wrap it as an AI-vs-AI self-play environment
+- [ ] Implement a reproducible batch AI-vs-AI match and `.grbr` replay generator that records random seeds, both strategy versions, game build, and complete results
+- [ ] Build version indexing, deduplication, abnormal match filtering, and distribution statistics for generated data, and evaluate generalization on a test set of real player replays only
+- [ ] Investigate sampling ratios, sample weights, and curriculum learning strategies for real replays vs. self-play data
+- [ ] Continuously calibrate the simulation environment against real replays so results do not only hold in an approximate simulator

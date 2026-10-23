@@ -19,7 +19,7 @@ class ExportSummary:
 
 def export_replay_directory(replay_directory: Path, output_path: Path) -> ExportSummary:
     if not replay_directory.is_dir():
-        raise NotADirectoryError(f"回放目录不存在：{replay_directory}")
+        raise NotADirectoryError(f"Replay directory does not exist: {replay_directory}")
     paths = sorted(replay_directory.glob("*.grbr"), key=lambda path: path.name.casefold())
     snapshots: list[MatchSnapshot] = []
     matches = 0

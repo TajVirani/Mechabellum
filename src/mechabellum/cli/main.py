@@ -26,54 +26,54 @@ def main() -> int:
     except KeyboardInterrupt:
         return 0
     except Exception as error:
-        print(f"错误: {error}", file=sys.stderr)
+        print(f"Error: {error}", file=sys.stderr)
         return 1
 
 
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="mecha", description="Mechabellum 数据采集、训练与胜率推理。")
+    parser = argparse.ArgumentParser(prog="mecha", description="Mechabellum data collection, training, and win probability inference.")
     commands = parser.add_subparsers(dest="command")
 
-    _command(commands, "probe", "定位游戏、回放和日志。", _probe)
-    latest = _command(commands, "latest", "读取最新回放快照。", _latest)
+    _command(commands, "probe", "Locate the game, replays, and logs.", _probe)
+    latest = _command(commands, "latest", "Read a snapshot from the latest replay.", _latest)
     latest.add_argument("--replay-dir", type=Path)
     latest.add_argument("--round", type=int)
     latest.add_argument("--json", action="store_true")
 
-    parse = _command(commands, "parse", "读取指定回放快照。", _parse)
+    parse = _command(commands, "parse", "Read a snapshot from the given replay.", _parse)
     parse.add_argument("replay", type=Path)
     parse.add_argument("--round", type=int)
     parse.add_argument("--json", action="store_true")
 
-    dump = _command(commands, "dump", "输出指定回放的全部标准快照。", _dump)
+    dump = _command(commands, "dump", "Output all standard snapshots from the given replay.", _dump)
     dump.add_argument("replay", type=Path)
 
-    export = _command(commands, "export-dataset", "把回放目录导出为 MatchSnapshot v1 JSONL。", _export_dataset)
+    export = _command(commands, "export-dataset", "Export a replay directory as MatchSnapshot v1 JSONL.", _export_dataset)
     export.add_argument("replay_directory", type=Path, nargs="?")
     export.add_argument("--output", type=Path, required=True)
 
-    _command(commands, "live-probe", "报告实时内存布局和对局状态。", _live_probe)
-    live = _command(commands, "live", "读取一次实时对局快照。", _live)
+    _command(commands, "live-probe", "Report the live memory layout and match state.", _live_probe)
+    live = _command(commands, "live", "Read one live match snapshot.", _live)
     live.add_argument("--json", action="store_true")
-    watch = _command(commands, "live-watch", "持续输出变化的实时对局快照。", _live_watch)
-    watch.add_argument("--interval", type=int, default=1000, help="轮询毫秒数，范围 250-30000。")
+    watch = _command(commands, "live-watch", "Continuously output live match snapshots when they change.", _live_watch)
+    watch.add_argument("--interval", type=int, default=1000, help="Polling interval in milliseconds, range 250-30000.")
     watch.add_argument("--json", action="store_true")
-    live_predict = _command(commands, "live-predict", "每回合战斗开始时直接输出最终胜率。", _live_predict)
+    live_predict = _command(commands, "live-predict", "Output final win probabilities at the start of each round's battle.", _live_predict)
     live_predict.add_argument("--interval", type=int, default=500)
     live_predict.add_argument("--model", type=Path, default=Path("artifacts/win_model.joblib"))
 
-    train = _command(commands, "train", "从 MatchSnapshot JSONL 训练最终胜率模型。", _train)
+    train = _command(commands, "train", "Train a final win probability model from MatchSnapshot JSONL.", _train)
     train.add_argument("--dataset", type=Path, required=True)
     train.add_argument("--output", type=Path, default=Path("artifacts/win_model.joblib"))
     train.add_argument("--test-size", type=float, default=0.25)
     train.add_argument("--seed", type=int, default=20260711)
     train.add_argument("--regularization", type=float)
 
-    predict = _command(commands, "predict", "对一个 MatchSnapshot 计算最终胜率。", _predict)
-    predict.add_argument("--input", type=Path, help="JSON 文件；省略时读取标准输入。")
+    predict = _command(commands, "predict", "Compute final win probabilities for one MatchSnapshot.", _predict)
+    predict.add_argument("--input", type=Path, help="JSON file; reads standard input when omitted.")
     predict.add_argument("--model", type=Path, default=Path("artifacts/win_model.joblib"))
 
-    timeline = _command(commands, "timeline", "输出一场对局的逐回合胜率。", _timeline)
+    timeline = _command(commands, "timeline", "Output round-by-round win probabilities for one match.", _timeline)
     timeline.add_argument("dataset", type=Path)
     timeline.add_argument("--battle-id")
     timeline.add_argument("--model", type=Path, default=Path("artifacts/win_model.joblib"))
@@ -99,16 +99,16 @@ def _configure_console() -> None:
 
 def _probe(_: argparse.Namespace) -> None:
     locations = locate_game()
-    print(f"游戏目录: {locations.install_directory or '未找到'}")
-    print(f"回放目录: {locations.replay_directory or '未找到'}")
-    print(f"玩家日志: {locations.player_log or '未找到'}")
+    print(f"Game directory: {locations.install_directory or 'not found'}")
+    print(f"Replay directory: {locations.replay_directory or 'not found'}")
+    print(f"Player log: {locations.player_log or 'not found'}")
 
 
 def _latest(args: argparse.Namespace) -> None:
     directory = args.replay_dir or _require_replay_directory()
     paths = sorted(directory.glob("*.grbr"), key=lambda path: path.stat().st_mtime_ns, reverse=True)
     if not paths:
-        raise FileNotFoundError(f"回放目录中没有 .grbr：{directory}")
+        raise FileNotFoundError(f"No .grbr files in replay directory: {directory}")
     _render(select_round(parse_replay(paths[0]), args.round), args.json)
 
 
@@ -131,10 +131,10 @@ def _export_dataset(args: argparse.Namespace) -> None:
 
     summary = export_replay_directory(args.replay_directory or _require_replay_directory(), args.output)
     for failure in summary.failures:
-        print(f"跳过: {failure}", file=sys.stderr)
+        print(f"Skipped: {failure}", file=sys.stderr)
     print(
-        f"导出完成：回放 {summary.replay_file_count}，1v1 {summary.match_count}，"
-        f"快照 {summary.snapshot_count}，失败 {summary.failure_count}，输出 {args.output.resolve()}",
+        f"Export complete: replays {summary.replay_file_count}, 1v1 {summary.match_count}, "
+        f"snapshots {summary.snapshot_count}, failures {summary.failure_count}, output {args.output.resolve()}",
         file=sys.stderr,
     )
 
@@ -238,38 +238,38 @@ def _render(snapshot: MatchSnapshot, as_json: bool) -> None:
     if as_json:
         print(snapshot_to_json(snapshot, indent=2))
         return
-    print(f"来源: {snapshot.source.uri}")
+    print(f"Source: {snapshot.source.uri}")
     print(
-        f"对局: {snapshot.match.battle_id or '未知'}  版本: {snapshot.game_build.replay_version or '未知'}  "
-        f"地图: {snapshot.match.map_id or '未知'}"
+        f"Match: {snapshot.match.battle_id or 'unknown'}  Version: {snapshot.game_build.replay_version or 'unknown'}  "
+        f"Map: {snapshot.match.map_id or 'unknown'}"
     )
     print(
-        f"模式: {snapshot.match.game_mode or '未知'}/{snapshot.match.match_mode or '未知'}  "
-        f"回合: {snapshot.match.round}  阶段: {snapshot.match.phase}"
+        f"Mode: {snapshot.match.game_mode or 'unknown'}/{snapshot.match.match_mode or 'unknown'}  "
+        f"Round: {snapshot.match.round}  Phase: {snapshot.match.phase}"
     )
     for player in snapshot.players:
         print(
             f"\n[{player.name}] Team={player.team if player.team is not None else '?'}  "
-            f"状态={player.state or '?'}  编队数={len(player.units)}  "
-            f"补给={player.supply if player.supply is not None else '?'}  "
-            f"核心={player.reactor_core if player.reactor_core is not None else '?'}"
+            f"State={player.state or '?'}  Formations={len(player.units)}  "
+            f"Supply={player.supply if player.supply is not None else '?'}  "
+            f"Core={player.reactor_core if player.reactor_core is not None else '?'}"
         )
         counts: dict[tuple[int, str, int], int] = {}
         for unit in player.units:
             key = (unit.unit_id, unit.unit_name, unit.display_level)
             counts[key] = counts.get(key, 0) + 1
         for (unit_id, name, level), count in sorted(counts.items()):
-            print(f"  {name} [ID {unit_id}]: Lv{level} × {count}")
+            print(f"  {name} [ID {unit_id}]: Lv{level} x {count}")
 
 
 def _require_replay_directory() -> Path:
     replay = locate_game().replay_directory
     if replay is None:
-        raise FileNotFoundError("未找到 Mechabellum 回放目录。")
+        raise FileNotFoundError("Mechabellum replay directory not found.")
     return replay
 
 
 def _interval(milliseconds: int) -> float:
     if milliseconds < 250 or milliseconds > 30_000:
-        raise ValueError("interval 必须在 250 到 30000 毫秒之间。")
+        raise ValueError("interval must be between 250 and 30000 milliseconds.")
     return milliseconds / 1000

@@ -30,9 +30,9 @@ def train_model(
     snapshots = load_training_snapshots(dataset_path)
     battle_ids = {snapshot.match.battle_id for snapshot in snapshots}
     if None in battle_ids:
-        raise ValueError("训练快照缺少 match.battleId。")
+        raise ValueError("Training snapshot is missing match.battleId.")
     if len(battle_ids) < 10:
-        raise ValueError(f"只有 {len(battle_ids)} 场可用 1v1，至少需要 10 场才能执行验证划分。")
+        raise ValueError(f"Only {len(battle_ids)} usable 1v1 matches; at least 10 are required for a validation split.")
 
     rows: list[np.ndarray] = []
     labels: list[int] = []
@@ -40,7 +40,7 @@ def train_model(
     rounds: list[int] = []
     for snapshot in snapshots:
         if snapshot.outcome is None or snapshot.match.battle_id is None:
-            raise ValueError("训练快照缺少 outcome 或 match.battleId。")
+            raise ValueError("Training snapshot is missing outcome or match.battleId.")
         winner_index = snapshot.outcome.winner_index
         battle_id = snapshot.match.battle_id
         round_number = snapshot.match.round

@@ -30,7 +30,7 @@
       "units": [
         {
           "unitId": 3,
-          "unitName": "Vulcan / 火神",
+          "unitName": "Vulcan",
           "formationIndex": 0,
           "rawLevel": 1,
           "displayLevel": 2,
@@ -47,7 +47,7 @@
       "activeTechnologies": [
         {
           "unitId": 3,
-          "unitName": "Vulcan / 火神",
+          "unitName": "Vulcan",
           "technologyIds": [30101]
         }
       ]

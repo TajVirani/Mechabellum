@@ -56,7 +56,7 @@ class ModuleInfo:
 
 def _kernel32() -> ctypes.WinDLL:
     if os.name != "nt":
-        raise OSError("Windows 进程读取仅支持 Windows。")
+        raise OSError("Windows process reading is only supported on Windows.")
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
     kernel32.CreateToolhelp32Snapshot.argtypes = [wintypes.DWORD, wintypes.DWORD]
     kernel32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
@@ -131,7 +131,7 @@ class WindowsProcessMemory:
 
     def read(self, address: int, size: int) -> bytes:
         if address <= 0 or size < 0:
-            raise ValueError(f"内存地址或长度无效：0x{address:X}, {size}")
+            raise ValueError(f"Invalid memory address or length: 0x{address:X}, {size}")
         buffer = ctypes.create_string_buffer(size)
         read = ctypes.c_size_t()
         if not self._kernel32.ReadProcessMemory(
@@ -139,7 +139,7 @@ class WindowsProcessMemory:
         ):
             raise ctypes.WinError(ctypes.get_last_error())
         if read.value != size:
-            raise OSError(f"内存读取长度不符：0x{address:X}，请求 {size}，实际 {read.value}")
+            raise OSError(f"Memory read length mismatch at 0x{address:X}: requested {size}, got {read.value}")
         return buffer.raw
 
     def close(self) -> None:

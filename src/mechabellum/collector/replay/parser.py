@@ -60,11 +60,11 @@ class ReplayMatch:
 def parse_replay(path: Path) -> ReplayMatch:
     root = extract_battle_record(path)
     if root.tag != "BattleRecord":
-        raise ValueError(f"不支持的 XML 根节点：{root.tag}")
+        raise ValueError(f"Unsupported XML root element: {root.tag}")
     battle_info = root.find("BattleInfo")
     players = [_parse_player(node) for node in root.findall("./playerRecords/PlayerRecord")]
     if not players:
-        raise ValueError("回放中没有玩家回合记录。")
+        raise ValueError("Replay contains no player round records.")
     return ReplayMatch(
         source_file=path.resolve(),
         version=_optional_int(root, "Version"),
@@ -80,13 +80,13 @@ def parse_replay(path: Path) -> ReplayMatch:
 def select_round(replay: ReplayMatch, round_number: int | None = None) -> MatchSnapshot:
     if round_number is None:
         if not replay.common_rounds:
-            raise ValueError("回放没有双方共有回合。")
+            raise ValueError("Replay has no rounds shared by both players.")
         round_number = max(replay.common_rounds)
     players = []
     for player in replay.players:
         state = player.rounds.get(round_number)
         if state is None:
-            raise ValueError(f"玩家 {player.name} 没有第 {round_number} 回合快照。")
+            raise ValueError(f"Player {player.name} has no snapshot for round {round_number}.")
         players.append(
             PlayerSnapshot(
                 player_id=player.player_id,

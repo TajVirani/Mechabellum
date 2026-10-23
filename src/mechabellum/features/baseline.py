@@ -77,9 +77,9 @@ def feature_names() -> list[str]:
 
 def build_features(snapshot: MatchSnapshot, perspective: int = 0) -> np.ndarray:
     if len(snapshot.players) != 2:
-        raise ValueError("胜率模型支持两名玩家的局面。")
+        raise ValueError("The win probability model only supports two-player positions.")
     if perspective not in (0, 1):
-        raise ValueError("perspective 必须是 0 或 1。")
+        raise ValueError("perspective must be 0 or 1.")
 
     own = _player_stats(snapshot.players[perspective])
     opponent = _player_stats(snapshot.players[1 - perspective])

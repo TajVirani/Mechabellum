@@ -30,7 +30,7 @@ def load_artifact(path: Path, expected_feature_names: list[str]) -> dict[str, An
 
     artifact = joblib.load(path)
     if artifact.get("featureNames") != expected_feature_names:
-        raise ValueError("模型特征版本与代码不一致，请重新训练。")
+        raise ValueError("Model feature version does not match the code; please retrain.")
     if artifact.get("matchSnapshotSchemaVersion") != MATCH_SNAPSHOT_SCHEMA_VERSION:
-        raise ValueError("模型 MatchSnapshot 契约版本与代码不一致，请重新训练。")
+        raise ValueError("Model MatchSnapshot contract version does not match the code; please retrain.")
     return artifact

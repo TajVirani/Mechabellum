@@ -1,38 +1,38 @@
 # Mechabellum Analytics
 
-Mechabellum 观战分析研究项目。它把 `.grbr` 回放解析、Windows 实时只读采集、版本化局面数据、数据集生成、模型训练和逐回合最终胜率推理整合在一个 Python 包中。
+A research project for Mechabellum spectator analytics. It combines `.grbr` replay parsing, read-only live collection on Windows, versioned match snapshot data, dataset generation, model training, and round-by-round final win probability inference in a single Python package.
 
-项目以 `MatchSnapshot v1` 作为正式数据边界：
+The project uses `MatchSnapshot v1` as its formal data boundary:
 
 ```text
-.grbr 回放 ─┐
-             ├─ collector ─→ MatchSnapshot v1 ─→ datasets ─→ training ─→ model
-实时进程 ────┘                         └──────────────────────→ inference
+.grbr replay ─────┐
+                  ├─ collector ─→ MatchSnapshot v1 ─→ datasets ─→ training ─→ model
+live process ─────┘                        └──────────────────────→ inference
 ```
 
-运行时模块直接传递强类型 Python 对象；保存和交换数据时使用通过 JSON Schema 校验的版本化 JSON 或 JSONL。
+Runtime modules pass strongly typed Python objects directly; data is saved and exchanged as versioned JSON or JSONL validated against a JSON Schema.
 
-## 参与公开回放募集
+## Contribute to the public replay collection
 
 > [!IMPORTANT]
-> 我们正在公开募集《Mechabellum》玩家自动保存的对局回放，用于扩充跨版本研究数据、改进解析器，
-> 以及训练和评估非商业游戏分析模型。
+> We are publicly collecting replays that Mechabellum automatically saves for players. They are used to expand
+> cross-version research data, improve the parser, and train and evaluate non-commercial game analysis models.
 
-详细说明见 **[回放募集仓库](https://github.com/FogMoe/Mechabellum-Replays)**，也可以直接
-**[上传对局回放](https://github.com/FogMoe/Mechabellum-Replays/issues/new?template=replay-upload.yml)**。
+See the **[replay collection repository](https://github.com/FogMoe/Mechabellum-Replays)** for details, or
+**[upload a replay](https://github.com/FogMoe/Mechabellum-Replays/issues/new?template=replay-upload.yml)** directly.
 
-## 功能
+## Features
 
-- 解析 `.grbr` 回放并输出每回合 `battle_start` 快照
-- 通过 Windows `ReadProcessMemory` 读取观战中的双方部署
-- 记录玩家、回合、经济、单位、等级、经验、坐标、装备与科技
-- 将回放目录导出为 `MatchSnapshot v1` JSONL 数据集
-- 按整场对局隔离训练集和测试集，训练双方对称的胜率基线
-- 对单个局面、整场时间线或实时战斗开始局面计算最终胜率
+- Parse `.grbr` replays and output a `battle_start` snapshot for each round
+- Read both players' deployments while spectating via Windows `ReadProcessMemory`
+- Record players, rounds, economy, units, levels, experience, coordinates, equipment, and technologies
+- Export a replay directory as a `MatchSnapshot v1` JSONL dataset
+- Split training and test sets by whole match and train a player-symmetric win probability baseline
+- Compute final win probabilities for a single position, a full match timeline, or the live battle start position
 
-## 安装
+## Installation
 
-需要 Python 3.11 或更高版本。实时内存采集仅支持 Windows；回放处理和模型管线可在其他 Python 平台运行。
+Requires Python 3.11 or later. Live memory collection is Windows-only; replay processing and the model pipeline run on other Python platforms.
 
 ```powershell
 python -m venv .venv
@@ -40,29 +40,29 @@ python -m venv .venv
 .venv\Scripts\python -m pip install -e .
 ```
 
-基础安装提供回放和实时采集。训练与推理安装 `ml` 组件，开发环境同时安装 `dev` 组件：
+The base install provides replay and live collection. Install the `ml` extra for training and inference, and the `dev` extra as well for a development environment:
 
 ```powershell
 .venv\Scripts\python -m pip install -e ".[ml]"
 .venv\Scripts\python -m pip install -e ".[ml,dev]"
 ```
 
-## 使用
+## Usage
 
-定位游戏、回放目录和日志：
+Locate the game, replay directory, and logs:
 
 ```powershell
 .venv\Scripts\mecha probe
 ```
 
-读取最新回放，或导出可训练数据集：
+Read the latest replay, or export a trainable dataset:
 
 ```powershell
 .venv\Scripts\mecha latest --json
 .venv\Scripts\mecha export-dataset --output data\match-snapshots.v1.jsonl
 ```
 
-检查内存布局、读取一次实时局面、持续观察变化：
+Check the memory layout, read one live snapshot, or continuously watch for changes:
 
 ```powershell
 .venv\Scripts\mecha live-probe
@@ -70,57 +70,57 @@ python -m venv .venv
 .venv\Scripts\mecha live-watch --json --interval 500
 ```
 
-训练模型并查看一场对局的逐回合胜率：
+Train a model and view round-by-round win probabilities for a match:
 
 ```powershell
 .venv\Scripts\mecha train --dataset data\match-snapshots.v1.jsonl
 .venv\Scripts\mecha timeline data\match-snapshots.v1.jsonl
 ```
 
-在观战中于每回合战斗开始时输出双方最终胜率：
+While spectating, output both players' final win probabilities at the start of each round's battle:
 
 ```powershell
 .venv\Scripts\mecha live-predict --model artifacts\win_model.joblib
 ```
 
-所有命令及参数可通过 `.venv\Scripts\mecha --help` 和对应子命令的 `--help` 查看。
+All commands and options are listed by `.venv\Scripts\mecha --help` and each subcommand's `--help`.
 
-## 项目结构
+## Project structure
 
 ```text
 Mechabellum/
 ├─ pyproject.toml
-├─ contracts/match-snapshot/v1/     # JSON Schema 与示例
+├─ contracts/match-snapshot/v1/     # JSON Schema and example
 ├─ src/mechabellum/
-│  ├─ collector/                     # 回放与实时内存数据源
-│  ├─ contracts/                     # 强类型 MatchSnapshot
-│  ├─ datasets/                      # JSONL 读写与回放导出
-│  ├─ features/                      # 双方对称的基线特征
-│  ├─ models/                        # 模型产物格式
-│  ├─ training/                      # 训练与评估
-│  ├─ inference/                     # 单局、时间线与实时推理
-│  └─ cli/                           # 统一 mecha 命令
+│  ├─ collector/                     # Replay and live memory data sources
+│  ├─ contracts/                     # Strongly typed MatchSnapshot
+│  ├─ datasets/                      # JSONL reading/writing and replay export
+│  ├─ features/                      # Player-symmetric baseline features
+│  ├─ models/                        # Model artifact format
+│  ├─ training/                      # Training and evaluation
+│  ├─ inference/                     # Single-position, timeline, and live inference
+│  └─ cli/                           # Unified mecha command
 ├─ tests/
 ├─ docs/
-├─ data/                             # 本地数据，不提交
-└─ artifacts/                        # 本地模型，不提交
+├─ data/                             # Local data, not committed
+└─ artifacts/                        # Local models, not committed
 ```
 
-模块边界和依赖方向见 [项目架构](docs/architecture.md)，实时版本与偏移见 [内存布局](docs/memory-layout.md)，后续功能见 [TODO](TODO.md)。
+See [Architecture](docs/architecture.md) for module boundaries and dependency direction, [Memory layout](docs/memory-layout.md) for live build versions and offsets, and [TODO](TODO.md) for upcoming features.
 
-## 数据契约
+## Data contract
 
-规范文件位于 [contracts/match-snapshot/v1/schema.json](contracts/match-snapshot/v1/schema.json)，可读示例位于 [battle-start.example.json](contracts/match-snapshot/v1/battle-start.example.json)。采集、数据集、训练与推理入口均使用同一组 Pydantic 模型，并在持久化边界执行 JSON Schema 校验。
+The specification is at [contracts/match-snapshot/v1/schema.json](contracts/match-snapshot/v1/schema.json), with a readable example at [battle-start.example.json](contracts/match-snapshot/v1/battle-start.example.json). Collection, datasets, training, and inference entry points all use the same set of Pydantic models and run JSON Schema validation at persistence boundaries.
 
-## 验证
+## Verification
 
 ```powershell
 .venv\Scripts\ruff check src tests
 .venv\Scripts\pytest -q
 ```
 
-实时采集依赖已适配的游戏构建和 `GameAssembly.dll` 哈希。游戏更新后应先运行 `mecha live-probe`，并按内存布局文档完成版本校验。
+Live collection depends on a supported game build and `GameAssembly.dll` hash. After a game update, run `mecha live-probe` first and complete version validation as described in the memory layout document.
 
-## 许可证
+## License
 
-本项目采用 [PolyForm Noncommercial License 1.0.0](LICENSE.md) 授权，仅允许许可证所定义的非商业用途。商业用途不在该许可证授权范围内。
+This project is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE.md), which permits only the non-commercial uses defined in the license. Commercial use is not covered by this license.
