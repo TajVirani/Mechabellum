@@ -46,6 +46,23 @@ class Il2CppReader:
             raise ValueError(f"Abnormal IL2CPP Array capacity: {capacity}, List size is {size}.")
         return list(struct.unpack(f"<{size}{item_format}", self._memory.read(items + 0x20, size * item_size)))
 
+    def read_dictionary_int_key_pointer_values(self, dictionary_address: int, maximum_count: int) -> list[int]:
+        """Values of a Dictionary<int, T> with a reference-type T, in entry order; removed entries are skipped."""
+        if dictionary_address == 0:
+            return []
+        entries = self.read_pointer(dictionary_address + 0x18)
+        count = self.read_int32(dictionary_address + 0x20)
+        if count < 0 or count > maximum_count:
+            raise ValueError(f"Abnormal IL2CPP Dictionary count: {count} (limit {maximum_count}).")
+        if count == 0:
+            return []
+        if entries == 0:
+            raise ValueError("The IL2CPP Dictionary entries pointer is null.")
+        # Entry layout: int hashCode, int next, int key, padding, T value -> 0x18 bytes; values start at +0x10.
+        data = self._memory.read(entries + 0x20, count * 0x18)
+        values = [struct.unpack_from("<Q", data, index * 0x18 + 0x10)[0] for index in range(count)]
+        return [value for value in values if value != 0]
+
     def read_object_class_name(self, object_address: int) -> str:
         class_address = self.read_pointer(object_address)
         return "" if class_address == 0 else self.read_class_name(class_address)

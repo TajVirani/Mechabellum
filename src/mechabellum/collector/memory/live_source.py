@@ -36,6 +36,7 @@ from .layouts import (
     PLAYER_MANAGER_CONTROLLERS,
     RISK_INFO_NAME,
     TEAM_SYSTEM_CONTROLLERS,
+    TECHNOLOGY_MANAGER_MAP,
     TECHNOLOGY_MANAGER_TECHNOLOGIES,
     TECHNOLOGY_MANAGER_UNIT_ID,
     UNIT_MANAGER_UNITS,
@@ -218,7 +219,7 @@ class LiveMemorySource:
             previous_fight_result=previous,
             fight_result_history=history,
             units=units,
-            active_technologies=self._read_active_technologies(player),
+            active_technologies=self._read_active_technologies(controller, player),
             equipment_inventory=None if modules is None else self._read_equipment_inventory(controller, modules),
             commander_skills=None if modules is None else self._read_commander_skills(controller, modules),
             officer_ids=None if modules is None else self._read_officer_ids(controller, modules),
@@ -433,17 +434,28 @@ class LiveMemorySource:
         team_controllers = self._memory.read_list_pointers(team_controllers_list, 8)
         return team_controllers.index(team_controller) if team_controller in team_controllers else None
 
-    def _read_active_technologies(self, player: int) -> list[UnitTechnologySet]:
+    def _technology_managers(self, controller: int, player: int) -> list[int]:
+        technology_manager_offset = self._layout.player_controller.technology_manager
+        if technology_manager_offset is not None:
+            technology_manager = self._memory.read_pointer(controller + technology_manager_offset)
+            return (
+                []
+                if technology_manager == 0
+                else self._memory.read_dictionary_int_key_pointer_values(
+                    self._memory.read_pointer(technology_manager + TECHNOLOGY_MANAGER_MAP), 256
+                )
+            )
         player_agent = self._memory.read_pointer(player + self._layout.player.player_agent)
         managers_list = (
             0
             if player_agent == 0
             else self._memory.read_pointer(player_agent + self._layout.player_agent_technology_managers)
         )
-        if managers_list == 0:
-            return []
+        return [] if managers_list == 0 else self._memory.read_list_pointers(managers_list, 256)
+
+    def _read_active_technologies(self, controller: int, player: int) -> list[UnitTechnologySet]:
         result = []
-        for manager in self._memory.read_list_pointers(managers_list, 256):
+        for manager in self._technology_managers(controller, player):
             if manager == 0:
                 continue
             unit_id = self._memory.read_int32(manager + TECHNOLOGY_MANAGER_UNIT_ID)

@@ -22,6 +22,8 @@ class PlayerControllerOffsets:
     player: int
     team_controller: int
     team_system: int
+    # From 2.0 the match updates the controller's TechnologyManager; PlayerAgent's list keeps inactive defaults.
+    technology_manager: int | None
 
 
 @dataclass(frozen=True)
@@ -121,6 +123,7 @@ PLAYER_MANAGER_CONTROLLERS = 0x18
 RISK_INFO_NAME = 0x10
 TEAM_SYSTEM_CONTROLLERS = 0x28
 UNIT_MANAGER_UNITS = 0x38
+TECHNOLOGY_MANAGER_MAP = 0x28
 TECHNOLOGY_MANAGER_TECHNOLOGIES = 0x10
 TECHNOLOGY_MANAGER_UNIT_ID = 0x18
 ITEM_DATA = 0x10
@@ -142,7 +145,7 @@ LAYOUT_1_11_0_2A = MemoryLayout(
     match=_MATCH,
     battle_info=_BATTLE_INFO,
     player_controller=PlayerControllerOffsets(
-        unit_manager=0x20, player=0x128, team_controller=0x130, team_system=0x148
+        unit_manager=0x20, player=0x128, team_controller=0x130, team_system=0x148, technology_manager=None
     ),
     player=PlayerOffsets(
         id=0x18,
@@ -171,7 +174,7 @@ LAYOUT_2_0_0_5 = MemoryLayout(
     match=_MATCH,
     battle_info=_BATTLE_INFO,
     player_controller=PlayerControllerOffsets(
-        unit_manager=0x30, player=0x138, team_controller=0x140, team_system=0x158
+        unit_manager=0x30, player=0x138, team_controller=0x140, team_system=0x158, technology_manager=0x1A0
     ),
     player=PlayerOffsets(
         id=0x18,

@@ -174,12 +174,37 @@ def _build_match(memory: SparseMemory, layout: MemoryLayout, base: int) -> None:
         equipment_field = memory.list(equipment) if layout.equipment_is_list else equipment[0]
         memory.pointer(card + layout.card_element.equipment, equipment_field)
         memory.pointer(unit_manager + 0x38, memory.list([card]))
+        if layout.player_controller.technology_manager is not None:
+            _build_technology_manager(memory, controller + layout.player_controller.technology_manager)
         if layout.player_modules is not None:
             _build_player_modules(memory, layout, controller, card, equipment, chosen_id=(1071326, 107226)[index])
 
     player_manager = memory.allocate()
     memory.pointer(match + layout.match.player_manager, player_manager)
     memory.pointer(player_manager + 0x18, memory.list(controllers))
+
+
+def _build_technology_manager(memory: SparseMemory, field: int) -> None:
+    """TechnologyManager whose Dictionary<int, UnitTechnologyManager> has one unit with one active technology."""
+    unit_managers = []
+    for unit_id, active in ((24, True), (25, False)):
+        technology = _item(memory, 10224 if active else 10225)
+        memory.write(technology + 0x18, b"\x01" if active else b"\x00")
+        unit_manager = memory.allocate()
+        memory.pointer(unit_manager + 0x10, memory.list([technology]))
+        memory.int32(unit_manager + 0x18, unit_id)
+        unit_managers.append((unit_id, unit_manager))
+    entries = memory.allocate()
+    for index, (unit_id, unit_manager) in enumerate(unit_managers):
+        entry = entries + 0x20 + index * 0x18
+        memory.int32(entry + 0x08, unit_id)
+        memory.pointer(entry + 0x10, unit_manager)
+    dictionary = memory.allocate()
+    memory.pointer(dictionary + 0x18, entries)
+    memory.int32(dictionary + 0x20, len(unit_managers))
+    technology_manager = memory.allocate()
+    memory.pointer(technology_manager + 0x28, dictionary)
+    memory.pointer(field, technology_manager)
 
 
 def _item(memory: SparseMemory, item_id: int) -> int:
@@ -289,6 +314,8 @@ def test_live_snapshot_reads_each_layout(layout: MemoryLayout) -> None:
     else:
         assert [(item.equipment_id, item.durability) for item in unit.equipment] == [(13030009, 3)]
         assert (alpha.max_reactor_core, alpha.round_supply_income, alpha.fight_result_history) == (None, None, None)
+    if layout.player_controller.technology_manager is not None:
+        assert [(t.unit_id, t.technology_ids) for t in alpha.active_technologies] == [(24, [10224])]
     if layout.player_modules is None:
         assert snapshot.match.reinforcement_offer is None
         assert (alpha.commander_skills, alpha.buildings, alpha.reinforcement_choice) == (None, None, None)
