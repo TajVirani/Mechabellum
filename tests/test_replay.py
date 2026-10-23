@@ -91,8 +91,17 @@ def _write_v2340_replay(path: Path) -> None:
             "<coolingRound>2</coolingRound><getRound>2</getRound></CommanderSkillData></commanderSkills>"
             "<equipmentDatas><EquipmentData><id>13030009</id><durability>-1</durability></EquipmentData></equipmentDatas>"
         )
+        opening = (
+            '<MatchActionData xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="PAD_ChooseAdvanceTeam">'
+            "<Time>27</Time><LocalTime>26.1</LocalTime><Index>3</Index><ID>9877</ID></MatchActionData>"
+        )
+        buy = (
+            '<MatchActionData xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="PAD_BuyUnit">'
+            "<Time>55</Time><LocalTime>53.85</LocalTime><UID>7</UID><position><x>0</x><y>-100</y></position>"
+            "<UIDX>-1</UIDX></MatchActionData>"
+        )
         # Round 2's choice is in its own record; the board at the end of fight 2 is in record 3.
-        rounds = [_round_record(1, extra), _round_record(2, extra, choice)]
+        rounds = [_round_record(0, extra, opening), _round_record(1, extra), _round_record(2, extra, choice + buy)]
         rounds.append(_round_record(3, extra).replace("<units />", unit))
         return "".join(rounds)
 
@@ -171,3 +180,19 @@ def test_winner_comes_from_final_team_ranks(tmp_path: Path) -> None:
     )
     replay_path.write_bytes(xml)
     assert parse_replay(replay_path).winner_index == 1
+
+
+def test_opening_lineup_and_round_actions(tmp_path: Path) -> None:
+    _write_v2340_replay(tmp_path / "fixture.grbr")
+    replay = parse_replay(tmp_path / "fixture.grbr")
+    assert replay.snapshot_rounds == [1, 2]
+    player_a = select_round(replay, 2).players[0]
+    assert player_a.opening_lineup is not None
+    assert (player_a.opening_lineup.advance_team_id, player_a.opening_lineup.offer_index) == (9877, 3)
+    actions = player_a.round_actions or []
+    assert [action.type for action in actions] == ["PAD_ChooseReinforceItem", "PAD_BuyUnit"]
+    buy = actions[1]
+    assert (buy.time, buy.local_time) == (55.0, 53.85)
+    assert buy.parameters == {"UID": 7, "position": {"x": 0, "y": -100}, "UIDX": -1}
+    # Round 1 has an empty action log, which is known and empty rather than unknown.
+    assert select_round(replay, 1).players[0].round_actions == []

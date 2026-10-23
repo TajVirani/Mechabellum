@@ -77,7 +77,14 @@
       "energyTowerSkillIds": [],
       "towerStrengthenLevels": [0, 0],
       "unlockedUnitIds": [3, 9, 10],
-      "reinforcementChoice": { "status": "chosen", "itemId": 300001, "offerIndex": 1 }
+      "reinforcementChoice": { "status": "chosen", "itemId": 300001, "offerIndex": 1 },
+      "openingLineup": { "advanceTeamId": 9877, "offerIndex": 3 },
+      "roundActions": [
+        { "type": "PAD_ChooseReinforceItem", "time": 17, "localTime": 72.8, "parameters": { "ID": 300001, "Index": 1, "paras": null } },
+        { "type": "PAD_BuyUnit", "time": 55, "localTime": 53.85, "parameters": { "UID": 3, "position": { "x": -40, "y": -150 }, "UIDX": -1 } },
+        { "type": "PAD_UpgradeTechnology", "time": 60, "localTime": 58.4, "parameters": { "UID": 3, "TechID": 30101 } },
+        { "type": "PAD_FinishDeploy", "time": 73, "localTime": 71.8, "parameters": {} }
+      ]
     },
     {
       "playerId": "1002",
@@ -102,7 +109,9 @@
       "energyTowerSkillIds": [],
       "towerStrengthenLevels": [0, 0],
       "unlockedUnitIds": [10],
-      "reinforcementChoice": { "status": "declined", "itemId": null, "offerIndex": null }
+      "reinforcementChoice": { "status": "declined", "itemId": null, "offerIndex": null },
+      "openingLineup": null,
+      "roundActions": []
     }
   ],
   "outcome": {

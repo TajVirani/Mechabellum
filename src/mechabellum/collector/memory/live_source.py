@@ -235,6 +235,9 @@ class LiveMemorySource:
             else self._read_tower_strengthen_levels(controller, modules),
             unlocked_unit_ids=None if modules is None else self._read_unlocked_unit_ids(controller, modules),
             reinforcement_choice=None if modules is None else self._read_reinforcement_choice(controller, offer),
+            # Neither the opening pick nor the action log has been located in live memory.
+            opening_lineup=None,
+            round_actions=None,
         )
 
     def _read_optional_int32(self, address: int, offset: int | None) -> int | None:

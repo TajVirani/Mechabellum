@@ -15,10 +15,10 @@
 
 ## P1A: Complete data collection
 
-- [ ] Parse replay `actionRecords`: purchases, unlocks, upgrades, technologies, moves, equipment, and abilities
+- [x] Parse replay `actionRecords`: purchases, unlocks, upgrades, technologies, moves, equipment, and abilities (`roundActions`)
 - [x] Output each round's dealt card candidates `reinforceItems` and the player's final choice `PAD_ChooseReinforceItem`
 - [x] Output specialists, commander abilities, shop unlocks, and building state
-- [ ] Output the opening lineup choice
+- [x] Output the opening lineup choice (`openingLineup`, from the round 0 `PAD_ChooseAdvanceTeam`)
 - [x] Read the current round's candidate and chosen cards from the live `ReinforcementManager`
 - [ ] Map live blueprint and energy tower skill ids to the values replays record
 - [ ] Build ID-to-name/cost tables for cards, technologies, equipment, and specialists

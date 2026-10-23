@@ -32,6 +32,8 @@ Models train on `fight_over` snapshots, and the live predictor runs on the first
 
 - `fightResultHistory` lists the results of the fights finished at the time of the snapshot, oldest first; a `fight_over` snapshot of round r includes fight r. Replay format 2340 stores the whole match's history in every round record; the parser truncates it so later results never leak into earlier rounds. Live memory only holds the fights since the spectator attached, so the history is `null` when spectating starts mid-match.
 - `reinforcementOffer` and `reinforcementChoice` are aligned by round: `offerIndex` indexes into `reinforcementOffer`. `AsyncBattle` uses a reinforcement shop instead, and its recorded opponent has no choice.
+- `roundActions` is the round's action log in recorded order. `type` is the replay's action type (for example `PAD_BuyUnit`); `parameters` keeps the action's own field names, with repeated elements as lists and nested elements as objects. A `fight_over` snapshot of round r carries round r's deployment actions. Live snapshots leave it `null`.
+- `openingLineup` is the advance team picked in the round 0 opening selection (`PAD_ChooseAdvanceTeam`). It is `null` when the replay has no round 0 record, as for AsyncBattle's recorded opponents, and in live snapshots.
 - `rating` is the player's 1v1 Elo from live memory (`PlayerBaseInfo.eloScore`). Replays do not record ratings, so replay snapshots leave it `null`.
 - `maxReactorCore` and `roundSupplyIncome` are current values read from live memory. Replays only store starting values and income settings, so replay snapshots leave them `null`.
 - `officerIds` lists hidden officers first, then visible ones, in both sources. `towerStrengthenLevels` has one entry per tower, 0 when never strengthened.

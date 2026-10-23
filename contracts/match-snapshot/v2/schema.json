@@ -85,7 +85,7 @@
         "playerId", "name", "team", "rating", "state", "supply", "reactorCore", "maxReactorCore", "roundSupplyIncome",
         "previousFightResult", "fightResultHistory", "units", "activeTechnologies", "equipmentInventory",
         "commanderSkills", "officerIds", "buildings", "contraptions", "blueprintIds", "energyTowerSkillIds",
-        "towerStrengthenLevels", "unlockedUnitIds", "reinforcementChoice"
+        "towerStrengthenLevels", "unlockedUnitIds", "reinforcementChoice", "openingLineup", "roundActions"
       ],
       "properties": {
         "playerId": { "$ref": "#/$defs/nullableString" },
@@ -156,7 +156,39 @@
             { "type": "null" },
             { "$ref": "#/$defs/reinforcementChoice" }
           ]
+        },
+        "openingLineup": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/openingLineup" }
+          ]
+        },
+        "roundActions": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "array", "items": { "$ref": "#/$defs/action" } }
+          ]
         }
+      }
+    },
+    "openingLineup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["advanceTeamId", "offerIndex"],
+      "properties": {
+        "advanceTeamId": { "type": "integer" },
+        "offerIndex": { "$ref": "#/$defs/nullableInteger" }
+      }
+    },
+    "action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "time", "localTime", "parameters"],
+      "properties": {
+        "type": { "type": "string", "minLength": 1 },
+        "time": { "type": ["number", "null"] },
+        "localTime": { "type": ["number", "null"] },
+        "parameters": { "type": "object" }
       }
     },
     "unit": {

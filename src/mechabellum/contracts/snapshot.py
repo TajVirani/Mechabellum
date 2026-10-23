@@ -105,6 +105,20 @@ class ReinforcementChoice(ContractModel):
     offer_index: int | None
 
 
+class OpeningLineup(ContractModel):
+    advance_team_id: int
+    offer_index: int | None
+
+
+class PlayerAction(ContractModel):
+    """One recorded deployment action; `parameters` keeps the replay's own field names and nesting."""
+
+    type: str = Field(min_length=1)
+    time: float | None
+    local_time: float | None
+    parameters: dict[str, Any]
+
+
 class PlayerSnapshot(ContractModel):
     player_id: str | None
     name: str
@@ -130,6 +144,9 @@ class PlayerSnapshot(ContractModel):
     tower_strengthen_levels: list[int] | None
     unlocked_unit_ids: list[int] | None
     reinforcement_choice: ReinforcementChoice | None
+    opening_lineup: OpeningLineup | None
+    # The actions behind this snapshot's board: for a fight_over snapshot, the deployment of that round.
+    round_actions: list[PlayerAction] | None
 
 
 class MatchOutcome(ContractModel):

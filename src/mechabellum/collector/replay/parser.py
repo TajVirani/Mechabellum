@@ -16,6 +16,8 @@ from ...contracts import (
     MatchInfo,
     MatchOutcome,
     MatchSnapshot,
+    OpeningLineup,
+    PlayerAction,
     PlayerSnapshot,
     ReinforcementChoice,
     SnapshotSource,
@@ -27,6 +29,8 @@ from .extractor import extract_battle_record
 
 T = TypeVar("T")
 XSI_TYPE = "{http://www.w3.org/2001/XMLSchema-instance}type"
+OPENING_LINEUP_ACTION = "PAD_ChooseAdvanceTeam"
+ACTION_TIME_FIELDS = ("Time", "LocalTime")
 FIGHT_RESULTS: dict[str, FightResult] = {"win": "Win", "lose": "Lose", "deuce": "Deuce"}
 
 
@@ -49,6 +53,7 @@ class PlayerRound:
     tower_strengthen_levels: list[int] | None
     unlocked_unit_ids: list[int] | None
     reinforcement_choice: ReinforcementChoice | None
+    round_actions: list[PlayerAction] | None
 
 
 @dataclass(frozen=True)
@@ -57,6 +62,19 @@ class PlayerHistory:
     name: str
     team: int | None
     rounds: dict[int, PlayerRound]
+
+    def opening_lineup(self) -> OpeningLineup | None:
+        """The advance team picked in the round 0 opening selection; None when that record is missing."""
+        opening = self.rounds.get(0)
+        if opening is None or opening.round_actions is None:
+            return None
+        picks = [action for action in opening.round_actions if action.type == OPENING_LINEUP_ACTION]
+        if not picks:
+            return None
+        team_id, index = picks[-1].parameters.get("ID"), picks[-1].parameters.get("Index")
+        if not isinstance(team_id, int):
+            return None
+        return OpeningLineup(advance_team_id=team_id, offer_index=index if isinstance(index, int) else None)
 
     def fight_result_history(self, round_number: int) -> list[FightResult] | None:
         """Results of the fights before `round_number`; never includes later rounds."""
@@ -174,6 +192,8 @@ def select_round(replay: ReplayMatch, round_number: int | None = None) -> MatchS
                 tower_strengthen_levels=state.tower_strengthen_levels,
                 unlocked_unit_ids=state.unlocked_unit_ids,
                 reinforcement_choice=current.reinforcement_choice,
+                opening_lineup=player.opening_lineup(),
+                round_actions=current.round_actions,
             )
         )
     outcome = None
@@ -241,6 +261,7 @@ def _parse_round(node: ElementTree.Element) -> PlayerRound:
         tower_strengthen_levels=_int_list(data, "towerStrengthenLevels"),
         unlocked_unit_ids=_int_list(data, "shop/unlockedUnits"),
         reinforcement_choice=_parse_reinforcement_choice(node),
+        round_actions=_parse_actions(node),
     )
 
 
@@ -326,6 +347,59 @@ def _parse_contraption(node: ElementTree.Element) -> Contraption | None:
     return Contraption(
         contraption_id=contraption_id, index=_int(node, "index"), x=_float(position, "x"), y=_float(position, "y")
     )
+
+
+def _parse_actions(node: ElementTree.Element) -> list[PlayerAction] | None:
+    records = node.find("actionRecords")
+    if records is None:
+        return None
+    actions = []
+    for action in records:
+        parameters = {child.tag: _xml_value(child) for child in action if child.tag not in ACTION_TIME_FIELDS}
+        actions.append(
+            PlayerAction(
+                type=action.attrib.get(XSI_TYPE, action.tag),
+                time=_number(action.findtext("Time")),
+                local_time=_number(action.findtext("LocalTime")),
+                parameters=parameters,
+            )
+        )
+    return actions
+
+
+def _xml_value(element: ElementTree.Element) -> object:
+    """An action field as JSON: repeated children become a list, distinct children an object, text a scalar."""
+    attributes = {key: _scalar(value) for key, value in element.attrib.items() if key != XSI_TYPE}
+    children = list(element)
+    if children:
+        tags = {child.tag for child in children}
+        if len(tags) == 1 and (len(children) > 1 or not attributes):
+            values = [_xml_value(child) for child in children]
+            return values if not attributes else {**attributes, "items": values}
+        return {**attributes, **{child.tag: _xml_value(child) for child in children}}
+    if attributes:
+        return attributes
+    text = (element.text or "").strip()
+    return None if not text else _scalar(text)
+
+
+def _scalar(text: str) -> object:
+    lowered = text.lower()
+    if lowered in ("true", "false"):
+        return lowered == "true"
+    for convert in (int, float):
+        try:
+            return convert(text)
+        except ValueError:
+            continue
+    return text
+
+
+def _number(text: str | None) -> float | None:
+    try:
+        return None if text is None or not text.strip() else float(text)
+    except ValueError:
+        return None
 
 
 def _parse_reinforcement_choice(node: ElementTree.Element) -> ReinforcementChoice | None:
