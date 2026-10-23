@@ -30,9 +30,7 @@ def export_replay_directory(replay_directory: Path, output_path: Path) -> Export
             if len(replay.players) != 2 or replay.match_mode != "VS_1_1" or replay.winner_index is None:
                 continue
             matches += 1
-            snapshots.extend(
-                select_round(replay, round_number) for round_number in replay.common_rounds if round_number >= 1
-            )
+            snapshots.extend(select_round(replay, round_number) for round_number in replay.snapshot_rounds)
         except Exception as error:
             failures.append(f"{path.name}: {error}")
     write_snapshots(output_path, snapshots)

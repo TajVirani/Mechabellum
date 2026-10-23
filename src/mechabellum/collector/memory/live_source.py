@@ -6,6 +6,9 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from ...contracts import (
+    Building,
+    CommanderSkill,
+    Contraption,
     EquipmentItem,
     FightResult,
     GameBuild,
@@ -13,6 +16,7 @@ from ...contracts import (
     MatchSnapshot,
     PlayerSnapshot,
     PlayerState,
+    ReinforcementChoice,
     SnapshotSource,
     UnitDeployment,
     UnitTechnologySet,
@@ -36,12 +40,14 @@ from .layouts import (
     TECHNOLOGY_MANAGER_UNIT_ID,
     UNIT_MANAGER_UNITS,
     MemoryLayout,
+    PlayerModuleOffsets,
     find_layout,
 )
 from .windows_process import WindowsProcessMemory, find_module, find_process_id
 
 MAX_EQUIPMENT_PER_UNIT = 8
 MAX_ROUNDS = 128
+MAX_MODULE_ITEMS = 256
 
 
 class ObserverStateError(RuntimeError):
@@ -126,7 +132,11 @@ class LiveMemorySource:
         if len(controllers) < 2:
             raise ObserverStateError(f"Only found {len(controllers)} player(s); the match snapshot is still loading.")
         round_number = self._memory.read_int32(match + offsets.round_count)
-        players = [self._read_player(controller, round_number) for controller in controllers if controller != 0]
+        controllers = [controller for controller in controllers if controller != 0]
+        # Every player is dealt the same offer; a disagreement means the read is not trustworthy.
+        offers = [self._read_reinforcement_offer(controller) for controller in controllers]
+        offer = offers[0] if all(item == offers[0] for item in offers) else None
+        players = [self._read_player(controller, round_number, offer) for controller in controllers]
         return MatchSnapshot(
             game_build=GameBuild(
                 replay_version=self._layout.replay_version,
@@ -153,7 +163,7 @@ class LiveMemorySource:
                 else _match_mode(self._memory.read_int32(battle_info + battle_offsets.match_mode)),
                 round=round_number,
                 phase=_resolve_phase(players),
-                reinforcement_offer=None,
+                reinforcement_offer=offer,
             ),
             players=players,
             outcome=None,
@@ -174,7 +184,7 @@ class LiveMemorySource:
             raise ValueError("Could not identify the IL2CPP type of the match.")
         return current_match, match_type
 
-    def _read_player(self, controller: int, round_number: int) -> PlayerSnapshot:
+    def _read_player(self, controller: int, round_number: int, offer: list[int] | None) -> PlayerSnapshot:
         offsets = self._layout.player
         player = self._memory.read_pointer(controller + self._layout.player_controller.player)
         if player == 0:
@@ -193,12 +203,14 @@ class LiveMemorySource:
         units = [
             unit for index, pointer in enumerate(unit_pointers) if (unit := self._read_unit(pointer, index)) is not None
         ]
-        history, previous = self._read_fight_results(player, round_number)
+        state = _player_state(self._memory.read_int32(player + offsets.state))
+        history, previous = self._read_fight_results(player, round_number, state)
+        modules = self._layout.player_modules
         return PlayerSnapshot(
             player_id=str(player_id),
             name=name,
             team=self._read_team_index(controller),
-            state=_player_state(self._memory.read_int32(player + offsets.state)),
+            state=state,
             supply=self._memory.read_int32(player + offsets.supply),
             reactor_core=self._memory.read_int32(player + offsets.reactor_core),
             max_reactor_core=self._read_optional_int32(player, offsets.max_reactor_core),
@@ -207,23 +219,191 @@ class LiveMemorySource:
             fight_result_history=history,
             units=units,
             active_technologies=self._read_active_technologies(player),
-            equipment_inventory=None,
-            commander_skills=None,
-            officer_ids=None,
-            buildings=None,
-            contraptions=None,
+            equipment_inventory=None if modules is None else self._read_equipment_inventory(controller, modules),
+            commander_skills=None if modules is None else self._read_commander_skills(controller, modules),
+            officer_ids=None if modules is None else self._read_officer_ids(controller, modules),
+            buildings=None if modules is None else self._read_buildings(controller, modules),
+            contraptions=None if modules is None else self._read_contraptions(controller, modules),
+            # Memory holds every blueprint and energy tower skill with an active flag, but neither the full lists
+            # nor the active subsets match what replays record, so these stay unknown.
             blueprint_ids=None,
             energy_tower_skill_ids=None,
-            tower_strengthen_levels=None,
-            unlocked_unit_ids=None,
-            reinforcement_choice=None,
+            tower_strengthen_levels=None
+            if modules is None
+            else self._read_tower_strengthen_levels(controller, modules),
+            unlocked_unit_ids=None if modules is None else self._read_unlocked_unit_ids(controller, modules),
+            reinforcement_choice=None if modules is None else self._read_reinforcement_choice(controller, offer),
         )
 
     def _read_optional_int32(self, address: int, offset: int | None) -> int | None:
         return None if offset is None else self._memory.read_int32(address + offset)
 
+    def _module_items(self, controller: int, manager_offset: int, list_offset: int | None = None) -> list[int]:
+        """Pointers in a PlayerController manager's item list (by default the list at `manager_items`)."""
+        modules = self._layout.player_modules
+        manager = self._memory.read_pointer(controller + manager_offset)
+        if modules is None or manager == 0:
+            return []
+        offset = modules.manager_items if list_offset is None else list_offset
+        items = self._memory.read_list_pointers(self._memory.read_pointer(manager + offset), MAX_MODULE_ITEMS)
+        return [item for item in items if item != 0]
+
+    def _item_id(self, item: int) -> int:
+        item_data = self._memory.read_pointer(item + ITEM_DATA)
+        return 0 if item_data == 0 else self._memory.read_int32(item_data + GR_OBJECT_ID)
+
+    def _read_officer_ids(self, controller: int, modules: PlayerModuleOffsets) -> list[int]:
+        # Replays list the hidden officers first, then the visible ones; keep that order.
+        officers = self._module_items(controller, modules.officer_manager, modules.officer_invisible_items)
+        officers += self._module_items(controller, modules.officer_manager)
+        return [officer_id for officer in officers if (officer_id := self._item_id(officer)) > 0]
+
+    def _read_tower_strengthen_levels(self, controller: int, modules: PlayerModuleOffsets) -> list[int]:
+        # A tower's strengthen data id is its level; towers that were never strengthened have none.
+        levels = []
+        for tower in self._module_items(controller, modules.building_manager, modules.building_manager_towers):
+            strengthen = self._memory.read_pointer(tower + modules.tower_strengthen_data)
+            levels.append(0 if strengthen == 0 else self._memory.read_int32(strengthen + GR_OBJECT_ID))
+        return levels
+
+    def _read_equipment_inventory(self, controller: int, modules: PlayerModuleOffsets) -> list[EquipmentItem]:
+        return [
+            EquipmentItem(equipment_id=item_id, durability=self._memory.read_int32(item + EQUIPMENT_DURABILITY))
+            for item in self._module_items(controller, modules.equipment_manager)
+            if (item_id := self._item_id(item)) > 0
+        ]
+
+    def _read_commander_skills(self, controller: int, modules: PlayerModuleOffsets) -> list[CommanderSkill]:
+        return [
+            CommanderSkill(
+                skill_id=skill_id,
+                slot_index=slot,
+                acquired_round=self._memory.read_int32(skill + modules.commander_skill_get_round),
+                cooldown_rounds=self._memory.read_int32(skill + modules.commander_skill_cooling_round),
+                is_active=self._memory.read_byte(skill + modules.commander_skill_is_active) != 0,
+            )
+            for slot, skill in enumerate(self._module_items(controller, modules.commander_skill_manager))
+            if (skill_id := self._item_id(skill)) > 0
+        ]
+
+    def _read_buildings(self, controller: int, modules: PlayerModuleOffsets) -> list[Building]:
+        manager = self._memory.read_pointer(controller + modules.construction_manager)
+        constructions = 0 if manager == 0 else self._memory.read_pointer(manager + modules.construction_map)
+        if constructions == 0:
+            return []
+        elements = self._memory.read_list_pointers(
+            self._memory.read_pointer(constructions + modules.sync_dictionary_values), MAX_MODULE_ITEMS
+        )
+        buildings = []
+        for element in elements:
+            data = 0 if element == 0 else self._memory.read_pointer(element + modules.construction_data)
+            map_element = 0 if element == 0 else self._memory.read_pointer(element + modules.construction_map_element)
+            building_id = 0 if data == 0 else self._memory.read_int32(data + GR_OBJECT_ID)
+            if building_id <= 0 or map_element == 0:
+                continue
+            x, y = self._read_bound_center(map_element)
+            buildings.append(
+                Building(
+                    building_id=building_id,
+                    index=self._memory.read_int32(element + modules.construction_combination_index),
+                    x=x,
+                    y=y,
+                    durability=self._memory.read_list_int32(
+                        self._memory.read_pointer(element + modules.construction_durabilities), MAX_MODULE_ITEMS
+                    ),
+                )
+            )
+        return buildings
+
+    def _read_contraptions(self, controller: int, modules: PlayerModuleOffsets) -> list[Contraption]:
+        manager = self._memory.read_pointer(controller + modules.contraption_manager)
+        recorder = 0 if manager == 0 else self._memory.read_pointer(manager + modules.contraption_recorder)
+        if recorder == 0:
+            return []
+        records = [
+            record
+            for offset in (modules.recorder_history, modules.recorder_current)
+            for record in self._memory.read_list_pointers(
+                self._memory.read_pointer(recorder + offset), MAX_MODULE_ITEMS
+            )
+            if record != 0
+        ]
+        contraptions = []
+        for record in records:
+            source = self._memory.read_pointer(record + modules.record_source)
+            data = 0 if source == 0 else self._memory.read_pointer(source + modules.contraption_data)
+            contraption_id = 0 if data == 0 else self._memory.read_int32(data + GR_OBJECT_ID)
+            # Positions is a List<Vector2Int>; each 8-byte element packs x then y.
+            positions = self._memory.read_list_pointers(
+                self._memory.read_pointer(record + modules.record_positions), MAX_MODULE_ITEMS
+            )
+            if contraption_id <= 0 or not positions:
+                continue
+            x, y = (_signed_int32(positions[0] & 0xFFFF_FFFF), _signed_int32(positions[0] >> 32))
+            contraptions.append(
+                Contraption(
+                    contraption_id=contraption_id,
+                    index=self._memory.read_int32(record + modules.record_index),
+                    x=float(x),
+                    y=float(y),
+                )
+            )
+        return contraptions
+
+    def _read_unlocked_unit_ids(self, controller: int, modules: PlayerModuleOffsets) -> list[int]:
+        manager = self._memory.read_pointer(controller + modules.shop_manager)
+        shop = 0 if manager == 0 else self._memory.read_pointer(manager + modules.shop)
+        if shop == 0:
+            return []
+        unit_ids = []
+        for card in self._memory.read_list_pointers(
+            self._memory.read_pointer(shop + modules.shop_unlocked_units), MAX_MODULE_ITEMS
+        ):
+            card_data = 0 if card == 0 else self._memory.read_pointer(card + self._layout.card_element.unit_data)
+            unit_id = 0 if card_data == 0 else self._memory.read_int32(card_data + GR_OBJECT_ID)
+            if unit_id > 0:
+                unit_ids.append(unit_id)
+        return unit_ids
+
+    def _read_reinforcement_offer(self, controller: int) -> list[int] | None:
+        """The card offer dealt this round: the last list in roundReinforceItems; [] when there is none."""
+        modules = self._layout.player_modules
+        manager = 0 if modules is None else self._memory.read_pointer(controller + modules.reinforcement_manager)
+        if modules is None or manager == 0:
+            return None
+        rounds = self._memory.read_list_pointers(
+            self._memory.read_pointer(manager + modules.reinforcement_round_items), MAX_ROUNDS
+        )
+        if not rounds or rounds[-1] == 0:
+            return []
+        return [self._item_id(item) for item in self._memory.read_list_pointers(rounds[-1], MAX_MODULE_ITEMS) if item]
+
+    def _read_reinforcement_choice(self, controller: int, offer: list[int] | None) -> ReinforcementChoice | None:
+        """This round's pick from the shared offer; null while nothing is picked or the pick is not in the offer."""
+        modules = self._layout.player_modules
+        manager = 0 if modules is None else self._memory.read_pointer(controller + modules.reinforcement_manager)
+        if modules is None or manager == 0 or not offer:
+            return None
+        chosen = [
+            self._item_id(item)
+            for item in self._memory.read_list_pointers(
+                self._memory.read_pointer(manager + modules.reinforcement_chosen_items), MAX_MODULE_ITEMS
+            )
+            if item
+        ]
+        if not chosen or chosen[-1] not in offer:
+            return None
+        return ReinforcementChoice(status="chosen", item_id=chosen[-1], offer_index=offer.index(chosen[-1]))
+
+    def _read_bound_center(self, map_element: int) -> tuple[float, float]:
+        bound_x = self._memory.read_int32(map_element + MAP_ELEMENT_BOUND)
+        bound_y = self._memory.read_int32(map_element + MAP_ELEMENT_BOUND + 0x04)
+        width = self._memory.read_int32(map_element + MAP_ELEMENT_BOUND + 0x08)
+        height = self._memory.read_int32(map_element + MAP_ELEMENT_BOUND + 0x0C)
+        return bound_x + width / 2, bound_y + height / 2
+
     def _read_fight_results(
-        self, player: int, round_number: int
+        self, player: int, round_number: int, state: PlayerState
     ) -> tuple[list[FightResult] | None, FightResult | None]:
         offsets = self._layout.player
         if offsets.fight_result_history is not None:
@@ -231,8 +411,8 @@ class LiveMemorySource:
                 self._memory.read_pointer(player + offsets.fight_result_history), MAX_ROUNDS
             )
             results = [_fight_result(value) for value in values]
-            # Keep the contract's meaning (fights before this round) even if the list already holds the current one.
-            completed = max(0, round_number - 1)
+            # The list holds the current round's result as soon as the fight starts; only count finished fights.
+            completed = round_number if state == "FightOver" else max(0, round_number - 1)
             if None in results or len(results) < completed:
                 return None, None
             history = [result for result in results[:completed] if result is not None]
@@ -297,10 +477,7 @@ class LiveMemorySource:
         unit_id = self._memory.read_int32(card_data + GR_OBJECT_ID)
         if unit_id <= 0 or unit_id > 100_000:
             return None
-        bound_x = self._memory.read_int32(map_element + MAP_ELEMENT_BOUND)
-        bound_y = self._memory.read_int32(map_element + MAP_ELEMENT_BOUND + 0x04)
-        width = self._memory.read_int32(map_element + MAP_ELEMENT_BOUND + 0x08)
-        height = self._memory.read_int32(map_element + MAP_ELEMENT_BOUND + 0x0C)
+        x, y = self._read_bound_center(map_element)
         raw_level = self._memory.read_int32(mech_team + team_offsets.level)
         experience = max(
             0, min(2_147_483_647, int(self._memory.read_int64(mech_team + team_offsets.experience) / 4_294_967_296))
@@ -312,8 +489,8 @@ class LiveMemorySource:
             raw_level=raw_level,
             display_level=raw_level + 1,
             experience=experience,
-            x=bound_x + width / 2,
-            y=bound_y + height / 2,
+            x=x,
+            y=y,
             is_rotated=self._memory.read_byte(map_element + MAP_ELEMENT_IS_ROTATE) != 0,
             sell_supply=self._memory.read_int32(card_element + offsets.sell_supply),
             round_count=self._memory.read_int32(mech_team + team_offsets.round_count),
@@ -369,6 +546,10 @@ def _game_mode(value: int) -> str:
 
 def _match_mode(value: int) -> str:
     return {0: "VS_1_1", 1: "VS_2_2", 2: "VS_4_Scuffle", 3: "VS_2_2_Scuffle"}.get(value, f"MatchMode#{value}")
+
+
+def _signed_int32(value: int) -> int:
+    return value - (1 << 32) if value >= 1 << 31 else value
 
 
 def _fight_result(value: int) -> FightResult | None:

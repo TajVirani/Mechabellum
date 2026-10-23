@@ -12,6 +12,8 @@ from jsonschema import Draft202012Validator, FormatChecker
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 MATCH_SNAPSHOT_SCHEMA_VERSION = 2
+# Replays record each round's board as it stands when the fight ends, so models train and predict on this phase.
+MODEL_SNAPSHOT_PHASE = "fight_over"
 
 FightResult = Literal["Win", "Lose", "Deuce"]
 PlayerState = Literal["Deploying", "DeployOver", "Fighting", "FightOver", "Unknown"]

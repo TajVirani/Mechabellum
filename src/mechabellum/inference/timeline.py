@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from ..contracts import MODEL_SNAPSHOT_PHASE
 from ..datasets import load_training_snapshots
 from .predictor import load_artifact, predict_snapshot
 
@@ -35,7 +36,7 @@ def render_timeline(dataset_path: Path, model_path: Path, battle_id: str | None 
         )
     return {
         "battleId": selected_battle_id,
-        "snapshotPhase": "battle_start",
+        "snapshotPhase": MODEL_SNAPSHOT_PHASE,
         "finalWinner": outcome.winner_name,
         "rounds": rounds,
     }

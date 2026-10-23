@@ -1,5 +1,6 @@
 from .snapshot import (
     MATCH_SNAPSHOT_SCHEMA_VERSION,
+    MODEL_SNAPSHOT_PHASE,
     Building,
     CommanderSkill,
     Contraption,
@@ -24,6 +25,7 @@ from .snapshot import (
 
 __all__ = [
     "MATCH_SNAPSHOT_SCHEMA_VERSION",
+    "MODEL_SNAPSHOT_PHASE",
     "Building",
     "CommanderSkill",
     "Contraption",

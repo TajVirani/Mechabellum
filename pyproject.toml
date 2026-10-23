@@ -39,7 +39,7 @@ where = ["src"]
 ]
 "share/mechabellum/contracts/match-snapshot/v2" = [
   "contracts/match-snapshot/v2/schema.json",
-  "contracts/match-snapshot/v2/battle-start.example.json",
+  "contracts/match-snapshot/v2/fight-over.example.json",
 ]
 
 [tool.pytest.ini_options]

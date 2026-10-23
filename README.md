@@ -23,7 +23,7 @@ See the **[replay collection repository](https://github.com/FogMoe/Mechabellum-R
 
 ## Features
 
-- Parse `.grbr` replays and output a `battle_start` snapshot for each round
+- Parse `.grbr` replays and output a `fight_over` snapshot for each round
 - Read both players' deployments while spectating via Windows `ReadProcessMemory`
 - Record players, rounds, economy, units, levels, experience, coordinates, equipment, and technologies
 - Export a replay directory as a `MatchSnapshot v1` JSONL dataset

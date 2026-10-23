@@ -4,7 +4,7 @@ import json
 from collections.abc import Iterable
 from pathlib import Path
 
-from ..contracts import MatchSnapshot, snapshot_to_json, validate_snapshot
+from ..contracts import MODEL_SNAPSHOT_PHASE, MatchSnapshot, snapshot_to_json, validate_snapshot
 
 
 def load_snapshots(path: Path) -> list[MatchSnapshot]:
@@ -26,7 +26,7 @@ def load_training_snapshots(path: Path) -> list[MatchSnapshot]:
         for snapshot in load_snapshots(path)
         if len(snapshot.players) == 2
         and snapshot.match.match_mode == "VS_1_1"
-        and snapshot.match.phase == "battle_start"
+        and snapshot.match.phase == MODEL_SNAPSHOT_PHASE
         and snapshot.outcome is not None
     ]
 

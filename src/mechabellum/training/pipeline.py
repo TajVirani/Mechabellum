@@ -12,7 +12,7 @@ from sklearn.model_selection import GroupKFold, GroupShuffleSplit
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
-from ..contracts import MATCH_SNAPSHOT_SCHEMA_VERSION
+from ..contracts import MATCH_SNAPSHOT_SCHEMA_VERSION, MODEL_SNAPSHOT_PHASE
 from ..datasets import load_training_snapshots
 from ..features import build_features, feature_names
 from ..models import create_artifact, save_artifact
@@ -73,7 +73,7 @@ def train_model(
         "datasetSha256": hashlib.sha256(dataset_path.read_bytes()).hexdigest().upper(),
         "matchSnapshotSchemaVersion": MATCH_SNAPSHOT_SCHEMA_VERSION,
         "featureSchemaVersion": 1,
-        "snapshotPhase": "battle_start",
+        "snapshotPhase": MODEL_SNAPSHOT_PHASE,
         "inputSnapshotCount": len(snapshots),
         "usableMatchCount": len(battle_ids),
         "trainingMatchCount": len(set(group_values[train_indices])),

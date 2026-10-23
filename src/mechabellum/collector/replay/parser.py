@@ -96,6 +96,12 @@ class ReplayMatch:
             common.intersection_update(player.rounds)
         return sorted(common)
 
+    @property
+    def snapshot_rounds(self) -> list[int]:
+        """Rounds with a fight_over snapshot: both the round's record and the next one are present."""
+        common = set(self.common_rounds)
+        return [round_number for round_number in sorted(common) if round_number >= 1 and round_number + 1 in common]
+
 
 def parse_replay(path: Path) -> ReplayMatch:
     root = extract_battle_record(path)
@@ -124,22 +130,31 @@ def parse_replay(path: Path) -> ReplayMatch:
 
 
 def select_round(replay: ReplayMatch, round_number: int | None = None) -> MatchSnapshot:
+    """The fight_over snapshot of `round_number`.
+
+    A replay's round record is written when that round begins, before income and deployment, so record r + 1 holds
+    the board as it stood when fight r ended. Record r itself holds round r's card offer and choice.
+    """
     if round_number is None:
-        if not replay.common_rounds:
-            raise ValueError("Replay has no rounds shared by both players.")
-        round_number = max(replay.common_rounds)
+        if not replay.snapshot_rounds:
+            raise ValueError("Replay has no fight_over snapshot shared by both players.")
+        round_number = max(replay.snapshot_rounds)
     players = []
     for player in replay.players:
-        state = player.rounds.get(round_number)
-        if state is None:
-            raise ValueError(f"Player {player.name} has no snapshot for round {round_number}.")
-        history = player.fight_result_history(round_number)
+        current = player.rounds.get(round_number)
+        state = player.rounds.get(round_number + 1)
+        if current is None or state is None:
+            raise ValueError(
+                f"Player {player.name} needs records for rounds {round_number} and {round_number + 1} "
+                f"to build the round {round_number} snapshot."
+            )
+        history = player.fight_result_history(round_number + 1)
         players.append(
             PlayerSnapshot(
                 player_id=player.player_id,
                 name=player.name,
                 team=player.team,
-                state="Fighting",
+                state="FightOver",
                 supply=state.supply,
                 reactor_core=state.reactor_core,
                 max_reactor_core=None,
@@ -157,7 +172,7 @@ def select_round(replay: ReplayMatch, round_number: int | None = None) -> MatchS
                 energy_tower_skill_ids=state.energy_tower_skill_ids,
                 tower_strengthen_levels=state.tower_strengthen_levels,
                 unlocked_unit_ids=state.unlocked_unit_ids,
-                reinforcement_choice=state.reinforcement_choice,
+                reinforcement_choice=current.reinforcement_choice,
             )
         )
     outcome = None
@@ -175,7 +190,7 @@ def select_round(replay: ReplayMatch, round_number: int | None = None) -> MatchS
             game_mode=replay.game_mode,
             match_mode=replay.match_mode,
             round=round_number,
-            phase="battle_start",
+            phase="fight_over",
             reinforcement_offer=replay.reinforcement_offers.get(round_number),
         ),
         players=players,

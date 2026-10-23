@@ -11,7 +11,7 @@ from typing import Any
 
 from ..collector import locate_game
 from ..collector.replay import parse_replay, select_round
-from ..contracts import MatchSnapshot, snapshot_to_dict, snapshot_to_json, validate_snapshot
+from ..contracts import MODEL_SNAPSHOT_PHASE, MatchSnapshot, snapshot_to_dict, snapshot_to_json, validate_snapshot
 
 
 def main() -> int:
@@ -58,7 +58,7 @@ def _parser() -> argparse.ArgumentParser:
     watch = _command(commands, "live-watch", "Continuously output live match snapshots when they change.", _live_watch)
     watch.add_argument("--interval", type=int, default=1000, help="Polling interval in milliseconds, range 250-30000.")
     watch.add_argument("--json", action="store_true")
-    live_predict = _command(commands, "live-predict", "Output final win probabilities at the start of each round's battle.", _live_predict)
+    live_predict = _command(commands, "live-predict", "Output final win probabilities when each round's fight ends.", _live_predict)
     live_predict.add_argument("--interval", type=int, default=500)
     live_predict.add_argument("--model", type=Path, default=Path("artifacts/win_model.joblib"))
 
@@ -118,11 +118,7 @@ def _parse(args: argparse.Namespace) -> None:
 
 def _dump(args: argparse.Namespace) -> None:
     replay = parse_replay(args.replay)
-    snapshots = [
-        snapshot_to_dict(select_round(replay, round_number))
-        for round_number in replay.common_rounds
-        if round_number >= 1
-    ]
+    snapshots = [snapshot_to_dict(select_round(replay, round_number)) for round_number in replay.snapshot_rounds]
     print(json.dumps(snapshots, ensure_ascii=False, indent=2))
 
 
@@ -191,7 +187,11 @@ def _live_predict(args: argparse.Namespace) -> None:
             try:
                 snapshot = source.read_snapshot()
                 key = (snapshot.match.battle_id, snapshot.match.round)
-                if snapshot.match.phase == "battle_start" and key not in emitted:
+                # The board is cleared when the match ends, so skip fight_over frames without units.
+                ready = snapshot.match.phase == MODEL_SNAPSHOT_PHASE and all(
+                    player.units for player in snapshot.players
+                )
+                if ready and key not in emitted:
                     emitted.add(key)
                     print(json.dumps(predict_snapshot(artifact, snapshot, args.model), ensure_ascii=False), flush=True)
             except ObserverStateError as error:

@@ -57,6 +57,46 @@ class MechTeamOffsets:
 
 
 @dataclass(frozen=True)
+class PlayerModuleOffsets:
+    """PlayerController managers behind the v2 player fields, and the members read from each."""
+
+    reinforcement_manager: int
+    reinforcement_round_items: int
+    reinforcement_chosen_items: int
+    officer_manager: int
+    commander_skill_manager: int
+    contraption_manager: int
+    construction_manager: int
+    equipment_manager: int
+    building_manager: int
+    shop_manager: int
+    # Each manager keeps its item list at the same offset.
+    manager_items: int
+    officer_invisible_items: int
+    building_manager_towers: int
+    tower_strengthen_data: int
+    commander_skill_cooling_round: int
+    commander_skill_get_round: int
+    commander_skill_is_active: int
+    construction_map: int
+    sync_dictionary_values: int
+    construction_data: int
+    construction_combination_index: int
+    construction_map_element: int
+    construction_durabilities: int
+    contraption_recorder: int
+    recorder_history: int
+    recorder_current: int
+    record_index: int
+    record_source: int
+    record_positions: int
+    record_is_old: int
+    contraption_data: int
+    shop: int
+    shop_unlocked_units: int
+
+
+@dataclass(frozen=True)
 class MemoryLayout:
     replay_version: int
     game_version: str
@@ -70,6 +110,8 @@ class MemoryLayout:
     card_element: CardElementOffsets
     equipment_is_list: bool
     mech_team: MechTeamOffsets
+    # None for builds whose v2 player fields have not been mapped; those fields are then null.
+    player_modules: PlayerModuleOffsets | None
 
 
 # Offsets shared by every supported build.
@@ -118,6 +160,7 @@ LAYOUT_1_11_0_2A = MemoryLayout(
     card_element=CardElementOffsets(unit_data=0x10, equipment=0x28, map_element=0x38, mech_team=0x48, sell_supply=0x60),
     equipment_is_list=False,
     mech_team=MechTeamOffsets(level=0x2C, experience=0x38, round_count=0x50),
+    player_modules=None,
 )
 
 LAYOUT_2_0_0_5 = MemoryLayout(
@@ -146,6 +189,41 @@ LAYOUT_2_0_0_5 = MemoryLayout(
     card_element=CardElementOffsets(unit_data=0x10, equipment=0x28, map_element=0x38, mech_team=0x48, sell_supply=0x60),
     equipment_is_list=True,
     mech_team=MechTeamOffsets(level=0x2C, experience=0x38, round_count=0x58),
+    player_modules=PlayerModuleOffsets(
+        reinforcement_manager=0x168,
+        reinforcement_round_items=0x50,
+        reinforcement_chosen_items=0x58,
+        officer_manager=0x190,
+        commander_skill_manager=0x198,
+        contraption_manager=0x1A8,
+        construction_manager=0x1B0,
+        equipment_manager=0x1B8,
+        building_manager=0x1C8,
+        shop_manager=0x1D0,
+        manager_items=0x28,
+        officer_invisible_items=0x30,
+        building_manager_towers=0x30,
+        tower_strengthen_data=0x30,
+        commander_skill_cooling_round=0x28,
+        commander_skill_get_round=0x30,
+        commander_skill_is_active=0x34,
+        construction_map=0x40,
+        sync_dictionary_values=0x18,
+        construction_data=0x18,
+        construction_combination_index=0x20,
+        construction_map_element=0x28,
+        construction_durabilities=0x40,
+        contraption_recorder=0x30,
+        recorder_history=0x18,
+        recorder_current=0x20,
+        record_index=0x10,
+        record_source=0x18,
+        record_positions=0x20,
+        record_is_old=0x30,
+        contraption_data=0x18,
+        shop=0x40,
+        shop_unlocked_units=0x28,
+    ),
 )
 
 SUPPORTED_LAYOUTS = (LAYOUT_1_11_0_2A, LAYOUT_2_0_0_5)

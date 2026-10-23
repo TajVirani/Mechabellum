@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ..contracts import MatchSnapshot
+from ..contracts import MODEL_SNAPSHOT_PHASE, MatchSnapshot
 from ..features import build_features, feature_names
 from ..models import load_artifact as _load_artifact
 
@@ -36,6 +36,6 @@ def predict_snapshot(artifact: dict[str, Any], snapshot: MatchSnapshot, model_pa
         ],
         "model": str(model_path.resolve()),
     }
-    if snapshot.match.phase != "battle_start":
-        result["warning"] = f"Input phase is {snapshot.match.phase}; the model was trained on battle_start."
+    if snapshot.match.phase != MODEL_SNAPSHOT_PHASE:
+        result["warning"] = f"Input phase is {snapshot.match.phase}; the model was trained on {MODEL_SNAPSHOT_PHASE}."
     return result

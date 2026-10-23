@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_perspectives_are_exact_opposites() -> None:
-    data = json.loads((ROOT / "contracts/match-snapshot/v2/battle-start.example.json").read_text(encoding="utf-8"))
+    data = json.loads((ROOT / "contracts/match-snapshot/v2/fight-over.example.json").read_text(encoding="utf-8"))
     snapshot = validate_snapshot(data)
     first = build_features(snapshot, 0)
     second = build_features(snapshot, 1)
