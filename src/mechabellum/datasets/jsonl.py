@@ -26,6 +26,8 @@ def load_training_snapshots(path: Path) -> list[MatchSnapshot]:
         for snapshot in load_snapshots(path)
         if len(snapshot.players) == 2
         and snapshot.match.match_mode == "VS_1_1"
+        # AsyncBattle pits a player against a recorded opponent with a card shop instead of card offers.
+        and snapshot.match.game_mode != "AsyncBattle"
         and snapshot.match.phase == MODEL_SNAPSHOT_PHASE
         and snapshot.outcome is not None
     ]

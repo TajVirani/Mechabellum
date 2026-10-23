@@ -29,7 +29,7 @@ def _write_replay(path: Path) -> None:
     <PlayerRecord><id>1</id><name>A</name><data><team>0</team></data><playerRoundRecords>{records_a}</playerRoundRecords></PlayerRecord>
     <PlayerRecord><id>2</id><name>B</name><data><team>1</team></data><playerRoundRecords>{records_b}</playerRoundRecords></PlayerRecord>
   </playerRecords>
-  <matchDatas><MatchSnapshotData><lastFightResult><Reports><FightReport><Score>500</Score></FightReport><FightReport><Score>0</Score></FightReport></Reports></lastFightResult></MatchSnapshotData></matchDatas>
+  <matchDatas><MatchSnapshotData><lastFightResult><Reports><FightReport><Score>500</Score></FightReport><FightReport><Score>0</Score></FightReport></Reports></lastFightResult><teamRanks><int>0</int><int>1</int></teamRanks></MatchSnapshotData></matchDatas>
   <Version>2119</Version>
   <BattleInfo><BattleID>fixture-battle</BattleID><MapID>1001</MapID><GameMode>Normal</GameMode><MatchMode>VS_1_1</MatchMode></BattleInfo>
 </BattleRecord>"""
@@ -104,7 +104,7 @@ def _write_v2340_replay(path: Path) -> None:
   </playerRecords>
   <matchDatas>
     <MatchSnapshotData><round>2</round><reinforceItems><ArrayOfInt><int>1200002</int><int>300001</int><int>10008</int><int>1200003</int></ArrayOfInt></reinforceItems>
-      <lastFightResult><Reports><FightReport><Score>500</Score></FightReport><FightReport><Score>0</Score></FightReport></Reports></lastFightResult></MatchSnapshotData>
+      <lastFightResult><Reports><FightReport><Score>500</Score></FightReport><FightReport><Score>0</Score></FightReport></Reports></lastFightResult><teamRanks><int>0</int><int>1</int></teamRanks></MatchSnapshotData>
   </matchDatas>
   <Version>2340</Version>
   <BattleInfo><BattleID>fixture-2340</BattleID><MapID>1001</MapID><GameMode>Normal</GameMode><MatchMode>VS_1_1</MatchMode></BattleInfo>
@@ -160,3 +160,14 @@ def test_legacy_history_and_equipment(tmp_path: Path) -> None:
     # Older formats record fight r's result in record r + 1.
     assert (snapshot.players[0].fight_result_history, snapshot.players[1].fight_result_history) == (["Win"], ["Lose"])
     assert snapshot.match.reinforcement_offer is None
+
+
+def test_winner_comes_from_final_team_ranks(tmp_path: Path) -> None:
+    replay_path = tmp_path / "fixture.grbr"
+    _write_replay(replay_path)
+    # The last fight report favors A, but it describes the second-to-last fight; the final ranks decide.
+    xml = replay_path.read_bytes().replace(
+        b"<teamRanks><int>0</int><int>1</int></teamRanks>", b"<teamRanks><int>1</int><int>0</int></teamRanks>"
+    )
+    replay_path.write_bytes(xml)
+    assert parse_replay(replay_path).winner_index == 1

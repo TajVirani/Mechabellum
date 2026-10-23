@@ -8,7 +8,7 @@ import numpy as np
 
 from ..contracts import MatchSnapshot, PlayerSnapshot
 
-UNIT_IDS = (*range(1, 32), 2002)
+UNIT_IDS = (*range(1, 33), 2002)
 
 
 @dataclass

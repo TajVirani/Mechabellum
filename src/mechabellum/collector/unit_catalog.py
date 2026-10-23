@@ -30,6 +30,7 @@ UNIT_NAMES: dict[int, str] = {
     29: "Abyss",
     30: "Void Eye",
     31: "Vortex",
+    32: "Centurion",
     2002: "Mountain",
 }
 

@@ -381,15 +381,18 @@ def _fight_result(value: str | None) -> FightResult | None:
 
 
 def _winner_index(root: ElementTree.Element, player_count: int) -> int | None:
+    """The player ranked 0 in the final teamRanks.
+
+    Fight report scores cannot be used: the MatchSnapshotData for round r reports fight r - 1, so the last one
+    describes the second-to-last fight and the deciding fight has no report.
+    """
     snapshots = root.findall("./matchDatas/MatchSnapshotData")
     if not snapshots:
         return None
-    scores = [_int(report, "Score") for report in snapshots[-1].findall("./lastFightResult/Reports/FightReport")]
-    if len(scores) != player_count or not scores:
+    ranks = [_int_text(item) for item in snapshots[-1].findall("./teamRanks/int")]
+    if len(ranks) != player_count or ranks.count(0) != 1:
         return None
-    maximum = max(scores)
-    winners = [index for index, score in enumerate(scores) if score == maximum]
-    return winners[0] if len(winners) == 1 else None
+    return ranks.index(0)
 
 
 def _text(parent: ElementTree.Element | None, name: str) -> str | None:
