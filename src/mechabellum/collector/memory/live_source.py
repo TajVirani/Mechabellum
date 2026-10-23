@@ -233,7 +233,16 @@ class LiveMemorySource:
             tower_strengthen_levels=None
             if modules is None
             else self._read_tower_strengthen_levels(controller, modules),
-            unlocked_unit_ids=None if modules is None else self._read_unlocked_unit_ids(controller, modules),
+            unlocked_unit_ids=None
+            if modules is None
+            else self._read_shop_unit_ids(controller, modules, modules.shop_unlocked_units),
+            locked_unit_ids=None
+            if modules is None
+            else self._read_shop_unit_ids(controller, modules, modules.shop_locked_units),
+            # A single frame has no fight report or per-fight history; live-predict fills the histories itself.
+            last_fight_report=None,
+            reactor_core_history=None,
+            supply_history=None,
             reinforcement_choice=None if modules is None else self._read_reinforcement_choice(controller, offer),
             # Neither the opening pick nor the action log has been located in live memory.
             opening_lineup=None,
@@ -355,15 +364,14 @@ class LiveMemorySource:
             )
         return contraptions
 
-    def _read_unlocked_unit_ids(self, controller: int, modules: PlayerModuleOffsets) -> list[int]:
+    def _read_shop_unit_ids(self, controller: int, modules: PlayerModuleOffsets, list_offset: int) -> list[int]:
+        """Unit ids in one of the shop's CardElement lists (unlocked or locked)."""
         manager = self._memory.read_pointer(controller + modules.shop_manager)
         shop = 0 if manager == 0 else self._memory.read_pointer(manager + modules.shop)
         if shop == 0:
             return []
         unit_ids = []
-        for card in self._memory.read_list_pointers(
-            self._memory.read_pointer(shop + modules.shop_unlocked_units), MAX_MODULE_ITEMS
-        ):
+        for card in self._memory.read_list_pointers(self._memory.read_pointer(shop + list_offset), MAX_MODULE_ITEMS):
             card_data = 0 if card == 0 else self._memory.read_pointer(card + self._layout.card_element.unit_data)
             unit_id = 0 if card_data == 0 else self._memory.read_int32(card_data + GR_OBJECT_ID)
             if unit_id > 0:

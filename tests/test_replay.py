@@ -196,3 +196,17 @@ def test_opening_lineup_and_round_actions(tmp_path: Path) -> None:
     assert buy.parameters == {"UID": 7, "position": {"x": 0, "y": -100}, "UIDX": -1}
     # Round 1 has an empty action log, which is known and empty rather than unknown.
     assert select_round(replay, 1).players[0].round_actions == []
+
+
+def test_last_fight_report_and_histories(tmp_path: Path) -> None:
+    _write_v2340_replay(tmp_path / "fixture.grbr")
+    replay = parse_replay(tmp_path / "fixture.grbr")
+    # The MatchSnapshotData for round 2 reports fight 1.
+    first = select_round(replay, 1)
+    report_a, report_b = (player.last_fight_report for player in first.players)
+    assert report_a is not None and report_b is not None
+    assert (report_a.score, report_b.score) == (500, 0)
+    assert select_round(replay, 2).players[0].last_fight_report is None
+    # Core and supply after each finished fight come from the following records.
+    second = select_round(replay, 2).players[0]
+    assert (second.reactor_core_history, second.supply_history) == ([4000, 4000], [0, 0])

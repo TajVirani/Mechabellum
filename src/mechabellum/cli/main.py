@@ -245,9 +245,11 @@ def _live_predict(args: argparse.Namespace) -> None:
     from ..collector.memory import LiveMemorySource, ObserverStateError
     from ..features import feature_names
     from ..inference import predict_snapshot
+    from ..inference.live_history import FightOverHistory
     from ..models import load_artifact
 
     artifact = load_artifact(args.model, feature_names())
+    history = FightOverHistory()
     emitted: set[tuple[str | None, int]] = set()
     interval = _interval(args.interval)
     with LiveMemorySource.attach() as source:
@@ -261,6 +263,7 @@ def _live_predict(args: argparse.Namespace) -> None:
                 )
                 if ready and key not in emitted:
                     emitted.add(key)
+                    snapshot = history.update(snapshot)
                     print(json.dumps(predict_snapshot(artifact, snapshot, args.model), ensure_ascii=False), flush=True)
             except ObserverStateError as error:
                 print(str(error), file=sys.stderr)

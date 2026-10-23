@@ -85,7 +85,8 @@
         "playerId", "name", "team", "rating", "state", "supply", "reactorCore", "maxReactorCore", "roundSupplyIncome",
         "previousFightResult", "fightResultHistory", "units", "activeTechnologies", "equipmentInventory",
         "commanderSkills", "officerIds", "buildings", "contraptions", "blueprintIds", "energyTowerSkillIds",
-        "towerStrengthenLevels", "unlockedUnitIds", "reinforcementChoice", "openingLineup", "roundActions"
+        "towerStrengthenLevels", "unlockedUnitIds", "lockedUnitIds", "lastFightReport", "reactorCoreHistory",
+        "supplyHistory", "reinforcementChoice", "openingLineup", "roundActions"
       ],
       "properties": {
         "playerId": { "$ref": "#/$defs/nullableString" },
@@ -151,6 +152,15 @@
         "energyTowerSkillIds": { "$ref": "#/$defs/nullableIntegerList" },
         "towerStrengthenLevels": { "$ref": "#/$defs/nullableIntegerList" },
         "unlockedUnitIds": { "$ref": "#/$defs/nullableIntegerList" },
+        "lockedUnitIds": { "$ref": "#/$defs/nullableIntegerList" },
+        "lastFightReport": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/fightReport" }
+          ]
+        },
+        "reactorCoreHistory": { "$ref": "#/$defs/nullableIntegerList" },
+        "supplyHistory": { "$ref": "#/$defs/nullableIntegerList" },
         "reinforcementChoice": {
           "oneOf": [
             { "type": "null" },
@@ -169,6 +179,17 @@
             { "type": "array", "items": { "$ref": "#/$defs/action" } }
           ]
         }
+      }
+    },
+    "fightReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["score", "deadScore", "aliveMechCount", "destroyedCrystalCount"],
+      "properties": {
+        "score": { "type": "integer" },
+        "deadScore": { "$ref": "#/$defs/nullableInteger" },
+        "aliveMechCount": { "$ref": "#/$defs/nullableInteger" },
+        "destroyedCrystalCount": { "$ref": "#/$defs/nullableInteger" }
       }
     },
     "openingLineup": {

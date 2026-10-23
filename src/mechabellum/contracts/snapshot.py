@@ -110,6 +110,15 @@ class OpeningLineup(ContractModel):
     offer_index: int | None
 
 
+class FightReport(ContractModel):
+    """The game's report of one player's side of a fight."""
+
+    score: int
+    dead_score: int | None
+    alive_mech_count: int | None
+    destroyed_crystal_count: int | None
+
+
 class PlayerAction(ContractModel):
     """One recorded deployment action; `parameters` keeps the replay's own field names and nesting."""
 
@@ -143,6 +152,12 @@ class PlayerSnapshot(ContractModel):
     energy_tower_skill_ids: list[int] | None
     tower_strengthen_levels: list[int] | None
     unlocked_unit_ids: list[int] | None
+    # Units still in the player's pool but not unlocked; with unlocked_unit_ids, the available unit pool.
+    locked_unit_ids: list[int] | None
+    # The report of the last finished fight, and core and remaining supply after each finished fight.
+    last_fight_report: FightReport | None
+    reactor_core_history: list[int] | None
+    supply_history: list[int] | None
     reinforcement_choice: ReinforcementChoice | None
     opening_lineup: OpeningLineup | None
     # The actions behind this snapshot's board: for a fight_over snapshot, the deployment of that round.

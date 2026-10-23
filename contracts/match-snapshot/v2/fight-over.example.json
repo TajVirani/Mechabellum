@@ -77,6 +77,10 @@
       "energyTowerSkillIds": [],
       "towerStrengthenLevels": [0, 0],
       "unlockedUnitIds": [3, 9, 10],
+      "lockedUnitIds": [1, 2, 4],
+      "lastFightReport": { "score": 412, "deadScore": 0, "aliveMechCount": 4, "destroyedCrystalCount": 0 },
+      "reactorCoreHistory": [3800, 3800, 3200],
+      "supplyHistory": [0, 50, 100],
       "reinforcementChoice": { "status": "chosen", "itemId": 300001, "offerIndex": 1 },
       "openingLineup": { "advanceTeamId": 9877, "offerIndex": 3 },
       "roundActions": [
@@ -109,6 +113,10 @@
       "energyTowerSkillIds": [],
       "towerStrengthenLevels": [0, 0],
       "unlockedUnitIds": [10],
+      "lockedUnitIds": [3],
+      "lastFightReport": { "score": 0, "deadScore": 0, "aliveMechCount": 0, "destroyedCrystalCount": 1 },
+      "reactorCoreHistory": [4300, 3600, 2800],
+      "supplyHistory": [50, 0, 50],
       "reinforcementChoice": { "status": "declined", "itemId": null, "offerIndex": null },
       "openingLineup": null,
       "roundActions": []

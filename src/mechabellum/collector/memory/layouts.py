@@ -97,6 +97,7 @@ class PlayerModuleOffsets:
     contraption_data: int
     shop: int
     shop_unlocked_units: int
+    shop_locked_units: int
 
 
 @dataclass(frozen=True)
@@ -228,6 +229,7 @@ LAYOUT_2_0_0_5 = MemoryLayout(
         contraption_data=0x18,
         shop=0x40,
         shop_unlocked_units=0x28,
+        shop_locked_units=0x30,
     ),
 )
 

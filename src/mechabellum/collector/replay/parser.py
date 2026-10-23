@@ -11,6 +11,7 @@ from ...contracts import (
     CommanderSkill,
     Contraption,
     EquipmentItem,
+    FightReport,
     FightResult,
     GameBuild,
     MatchInfo,
@@ -52,6 +53,7 @@ class PlayerRound:
     energy_tower_skill_ids: list[int] | None
     tower_strengthen_levels: list[int] | None
     unlocked_unit_ids: list[int] | None
+    locked_unit_ids: list[int] | None
     reinforcement_choice: ReinforcementChoice | None
     round_actions: list[PlayerAction] | None
 
@@ -92,6 +94,17 @@ class PlayerHistory:
             history.append(state.recorded_previous_fight_result)
         return history
 
+    def values_after_fights(self, round_number: int, value: Callable[[PlayerRound], int | None]) -> list[int] | None:
+        """`value` after each of fights 1..round_number, read from records 2..round_number + 1."""
+        values = []
+        for later_round in range(2, round_number + 2):
+            state = self.rounds.get(later_round)
+            item = None if state is None else value(state)
+            if item is None:
+                return None
+            values.append(item)
+        return values
+
 
 @dataclass(frozen=True)
 class ReplayMatch:
@@ -104,6 +117,8 @@ class ReplayMatch:
     winner_index: int | None
     players: list[PlayerHistory]
     reinforcement_offers: dict[int, list[int] | None]
+    # Fight number -> one report per player, in player order.
+    fight_reports: dict[int, list[FightReport | None]]
 
     @property
     def common_rounds(self) -> list[int]:
@@ -144,6 +159,7 @@ def parse_replay(path: Path) -> ReplayMatch:
         winner_index=_winner_index(root, len(players)),
         players=players,
         reinforcement_offers=_reinforcement_offers(root),
+        fight_reports=_fight_reports(root, len(players)),
     )
 
 
@@ -158,7 +174,8 @@ def select_round(replay: ReplayMatch, round_number: int | None = None) -> MatchS
             raise ValueError("Replay has no fight_over snapshot shared by both players.")
         round_number = max(replay.snapshot_rounds)
     players = []
-    for player in replay.players:
+    reports = replay.fight_reports.get(round_number, [])
+    for player_index, player in enumerate(replay.players):
         current = player.rounds.get(round_number)
         state = player.rounds.get(round_number + 1)
         if current is None or state is None:
@@ -191,6 +208,10 @@ def select_round(replay: ReplayMatch, round_number: int | None = None) -> MatchS
                 energy_tower_skill_ids=state.energy_tower_skill_ids,
                 tower_strengthen_levels=state.tower_strengthen_levels,
                 unlocked_unit_ids=state.unlocked_unit_ids,
+                locked_unit_ids=state.locked_unit_ids,
+                last_fight_report=reports[player_index] if player_index < len(reports) else None,
+                reactor_core_history=player.values_after_fights(round_number, lambda item: item.reactor_core),
+                supply_history=player.values_after_fights(round_number, lambda item: item.supply),
                 reinforcement_choice=current.reinforcement_choice,
                 opening_lineup=player.opening_lineup(),
                 round_actions=current.round_actions,
@@ -260,6 +281,7 @@ def _parse_round(node: ElementTree.Element) -> PlayerRound:
         energy_tower_skill_ids=_int_list(data, "energyTowerSkills"),
         tower_strengthen_levels=_int_list(data, "towerStrengthenLevels"),
         unlocked_unit_ids=_int_list(data, "shop/unlockedUnits"),
+        locked_unit_ids=_int_list(data, "shop/lockedUnits"),
         reinforcement_choice=_parse_reinforcement_choice(node),
         round_actions=_parse_actions(node),
     )
@@ -432,6 +454,28 @@ def _reinforcement_offers(root: ElementTree.Element) -> dict[int, list[int] | No
         else:
             offers[round_number] = None
     return offers
+
+
+def _fight_reports(root: ElementTree.Element, player_count: int) -> dict[int, list[FightReport | None]]:
+    """Reports keyed by the fight they describe: the MatchSnapshotData for round r reports fight r - 1."""
+    reports: dict[int, list[FightReport | None]] = {}
+    for data in root.findall("./matchDatas/MatchSnapshotData"):
+        round_number = _optional_int(data, "round")
+        nodes = data.findall("./lastFightResult/Reports/FightReport")
+        if round_number is None or round_number < 2 or len(nodes) != player_count:
+            continue
+        reports[round_number - 1] = [
+            None
+            if _optional_int(node, "Score") is None
+            else FightReport(
+                score=_int(node, "Score"),
+                dead_score=_optional_int(node, "DeadScore"),
+                alive_mech_count=_optional_int(node, "AliveMechCount"),
+                destroyed_crystal_count=_optional_int(node, "DestroyedCrystalCount"),
+            )
+            for node in nodes
+        ]
+    return reports
 
 
 def _parse_list(
