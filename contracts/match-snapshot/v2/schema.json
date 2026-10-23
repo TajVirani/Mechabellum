@@ -1,0 +1,262 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mechabellum-analytics.local/contracts/match-snapshot/v2/schema.json",
+  "title": "MatchSnapshotV2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "gameBuild", "source", "match", "players"],
+  "properties": {
+    "schemaVersion": { "const": 2 },
+    "gameBuild": { "$ref": "#/$defs/gameBuild" },
+    "source": { "$ref": "#/$defs/source" },
+    "match": { "$ref": "#/$defs/match" },
+    "players": {
+      "type": "array",
+      "minItems": 2,
+      "items": { "$ref": "#/$defs/player" }
+    },
+    "outcome": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/outcome" }
+      ]
+    }
+  },
+  "$defs": {
+    "nullableString": { "type": ["string", "null"] },
+    "nullableInteger": { "type": ["integer", "null"] },
+    "nullableIntegerList": {
+      "oneOf": [
+        { "type": "null" },
+        { "type": "array", "items": { "type": "integer" } }
+      ]
+    },
+    "fightResult": { "enum": ["Win", "Lose", "Deuce"] },
+    "gameBuild": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["replayVersion", "gameVersion", "gameAssemblySha256"],
+      "properties": {
+        "replayVersion": { "$ref": "#/$defs/nullableInteger" },
+        "gameVersion": { "$ref": "#/$defs/nullableString" },
+        "gameAssemblySha256": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "string", "pattern": "^[0-9A-Fa-f]{64}$" }
+          ]
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "uri", "capturedAtUtc"],
+      "properties": {
+        "type": { "enum": ["replay", "memory"] },
+        "uri": { "type": "string", "minLength": 1 },
+        "capturedAtUtc": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "string", "format": "date-time" }
+          ]
+        }
+      }
+    },
+    "match": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["battleId", "mapId", "gameMode", "matchMode", "round", "phase", "reinforcementOffer"],
+      "properties": {
+        "battleId": { "$ref": "#/$defs/nullableString" },
+        "mapId": { "$ref": "#/$defs/nullableInteger" },
+        "gameMode": { "$ref": "#/$defs/nullableString" },
+        "matchMode": { "$ref": "#/$defs/nullableString" },
+        "round": { "type": "integer", "minimum": 0 },
+        "phase": {
+          "enum": ["opening", "deploying", "deploy_over", "battle_start", "fighting", "fight_over", "unknown"]
+        },
+        "reinforcementOffer": { "$ref": "#/$defs/nullableIntegerList" }
+      }
+    },
+    "player": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "playerId", "name", "team", "state", "supply", "reactorCore", "maxReactorCore", "roundSupplyIncome",
+        "previousFightResult", "fightResultHistory", "units", "activeTechnologies", "equipmentInventory",
+        "commanderSkills", "officerIds", "buildings", "contraptions", "blueprintIds", "energyTowerSkillIds",
+        "towerStrengthenLevels", "unlockedUnitIds", "reinforcementChoice"
+      ],
+      "properties": {
+        "playerId": { "$ref": "#/$defs/nullableString" },
+        "name": { "type": "string" },
+        "team": { "$ref": "#/$defs/nullableInteger" },
+        "state": {
+          "oneOf": [
+            { "type": "null" },
+            { "enum": ["Deploying", "DeployOver", "Fighting", "FightOver", "Unknown"] }
+          ]
+        },
+        "supply": { "$ref": "#/$defs/nullableInteger" },
+        "reactorCore": { "$ref": "#/$defs/nullableInteger" },
+        "maxReactorCore": { "$ref": "#/$defs/nullableInteger" },
+        "roundSupplyIncome": { "$ref": "#/$defs/nullableInteger" },
+        "previousFightResult": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/fightResult" }
+          ]
+        },
+        "fightResultHistory": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "array", "items": { "$ref": "#/$defs/fightResult" } }
+          ]
+        },
+        "units": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/unit" }
+        },
+        "activeTechnologies": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/unitTechnologySet" }
+        },
+        "equipmentInventory": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "array", "items": { "$ref": "#/$defs/equipmentItem" } }
+          ]
+        },
+        "commanderSkills": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "array", "items": { "$ref": "#/$defs/commanderSkill" } }
+          ]
+        },
+        "officerIds": { "$ref": "#/$defs/nullableIntegerList" },
+        "buildings": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "array", "items": { "$ref": "#/$defs/building" } }
+          ]
+        },
+        "contraptions": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "array", "items": { "$ref": "#/$defs/contraption" } }
+          ]
+        },
+        "blueprintIds": { "$ref": "#/$defs/nullableIntegerList" },
+        "energyTowerSkillIds": { "$ref": "#/$defs/nullableIntegerList" },
+        "towerStrengthenLevels": { "$ref": "#/$defs/nullableIntegerList" },
+        "unlockedUnitIds": { "$ref": "#/$defs/nullableIntegerList" },
+        "reinforcementChoice": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/reinforcementChoice" }
+          ]
+        }
+      }
+    },
+    "unit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["unitId", "unitName", "formationIndex", "rawLevel", "displayLevel", "experience", "x", "y", "isRotated", "sellSupply", "roundCount", "equipment"],
+      "properties": {
+        "unitId": { "type": "integer", "minimum": 1 },
+        "unitName": { "type": "string" },
+        "formationIndex": { "type": "integer" },
+        "rawLevel": { "type": "integer", "minimum": 0 },
+        "displayLevel": { "type": "integer", "minimum": 1 },
+        "experience": { "type": "integer", "minimum": 0 },
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "isRotated": { "type": "boolean" },
+        "sellSupply": { "type": "integer" },
+        "roundCount": { "type": "integer" },
+        "equipment": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/equipmentItem" }
+        }
+      }
+    },
+    "equipmentItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["equipmentId", "durability"],
+      "properties": {
+        "equipmentId": { "type": "integer", "minimum": 1 },
+        "durability": { "$ref": "#/$defs/nullableInteger" }
+      }
+    },
+    "unitTechnologySet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["unitId", "unitName", "technologyIds"],
+      "properties": {
+        "unitId": { "type": "integer", "minimum": 1 },
+        "unitName": { "type": "string" },
+        "technologyIds": {
+          "type": "array",
+          "items": { "type": "integer", "minimum": 1 },
+          "uniqueItems": true
+        }
+      }
+    },
+    "commanderSkill": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["skillId", "slotIndex", "acquiredRound", "cooldownRounds", "isActive"],
+      "properties": {
+        "skillId": { "type": "integer", "minimum": 1 },
+        "slotIndex": { "type": "integer" },
+        "acquiredRound": { "$ref": "#/$defs/nullableInteger" },
+        "cooldownRounds": { "$ref": "#/$defs/nullableInteger" },
+        "isActive": { "type": ["boolean", "null"] }
+      }
+    },
+    "building": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["buildingId", "index", "x", "y", "durability"],
+      "properties": {
+        "buildingId": { "type": "integer", "minimum": 1 },
+        "index": { "type": "integer" },
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "durability": { "$ref": "#/$defs/nullableIntegerList" }
+      }
+    },
+    "contraption": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contraptionId", "index", "x", "y"],
+      "properties": {
+        "contraptionId": { "type": "integer", "minimum": 1 },
+        "index": { "type": "integer" },
+        "x": { "type": "number" },
+        "y": { "type": "number" }
+      }
+    },
+    "reinforcementChoice": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "itemId", "offerIndex"],
+      "properties": {
+        "status": { "enum": ["chosen", "declined"] },
+        "itemId": { "$ref": "#/$defs/nullableInteger" },
+        "offerIndex": { "$ref": "#/$defs/nullableInteger" }
+      }
+    },
+    "outcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["winnerIndex", "winnerPlayerId", "winnerName"],
+      "properties": {
+        "winnerIndex": { "type": "integer", "minimum": 0 },
+        "winnerPlayerId": { "$ref": "#/$defs/nullableString" },
+        "winnerName": { "$ref": "#/$defs/nullableString" }
+      }
+    }
+  }
+}

@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 2,
+  "gameBuild": {
+    "replayVersion": 2340,
+    "gameVersion": "2.0.0.5",
+    "gameAssemblySha256": null
+  },
+  "source": {
+    "type": "replay",
+    "uri": "replay:///example.grbr",
+    "capturedAtUtc": null
+  },
+  "match": {
+    "battleId": "example-battle",
+    "mapId": 1001,
+    "gameMode": "Normal",
+    "matchMode": "VS_1_1",
+    "round": 3,
+    "phase": "battle_start",
+    "reinforcementOffer": [1200002, 300001, 10008, 1200003]
+  },
+  "players": [
+    {
+      "playerId": "1001",
+      "name": "Player A",
+      "team": null,
+      "state": "Fighting",
+      "supply": 100,
+      "reactorCore": 3200,
+      "maxReactorCore": null,
+      "roundSupplyIncome": null,
+      "previousFightResult": "Win",
+      "fightResultHistory": ["Lose", "Win"],
+      "units": [
+        {
+          "unitId": 3,
+          "unitName": "Vulcan",
+          "formationIndex": 0,
+          "rawLevel": 1,
+          "displayLevel": 2,
+          "experience": 120,
+          "x": -40,
+          "y": -150,
+          "isRotated": false,
+          "sellSupply": 400,
+          "roundCount": 2,
+          "equipment": [
+            { "equipmentId": 13030009, "durability": null },
+            { "equipmentId": 13030521, "durability": null }
+          ]
+        }
+      ],
+      "activeTechnologies": [
+        {
+          "unitId": 3,
+          "unitName": "Vulcan",
+          "technologyIds": [30101]
+        }
+      ],
+      "equipmentInventory": [
+        { "equipmentId": 13030009, "durability": -1 },
+        { "equipmentId": 13030521, "durability": -1 }
+      ],
+      "commanderSkills": [
+        { "skillId": 900001, "slotIndex": 0, "acquiredRound": 1, "cooldownRounds": 0, "isActive": false },
+        { "skillId": 300001, "slotIndex": 1, "acquiredRound": 2, "cooldownRounds": 2, "isActive": false }
+      ],
+      "officerIds": [20032],
+      "buildings": [
+        { "buildingId": 1, "index": 0, "x": -140, "y": -55, "durability": [-1, -1, -1, -1, -1] }
+      ],
+      "contraptions": [
+        { "contraptionId": 10001, "index": 0, "x": 131, "y": -129 }
+      ],
+      "blueprintIds": [2],
+      "energyTowerSkillIds": [],
+      "towerStrengthenLevels": [0, 0],
+      "unlockedUnitIds": [3, 9, 10],
+      "reinforcementChoice": { "status": "chosen", "itemId": 300001, "offerIndex": 1 }
+    },
+    {
+      "playerId": "1002",
+      "name": "Player B",
+      "team": null,
+      "state": "Fighting",
+      "supply": 50,
+      "reactorCore": 2800,
+      "maxReactorCore": null,
+      "roundSupplyIncome": null,
+      "previousFightResult": "Lose",
+      "fightResultHistory": ["Win", "Lose"],
+      "units": [],
+      "activeTechnologies": [],
+      "equipmentInventory": [],
+      "commanderSkills": [],
+      "officerIds": [],
+      "buildings": [],
+      "contraptions": [],
+      "blueprintIds": [],
+      "energyTowerSkillIds": [],
+      "towerStrengthenLevels": [0, 0],
+      "unlockedUnitIds": [10],
+      "reinforcementChoice": { "status": "declined", "itemId": null, "offerIndex": null }
+    }
+  ],
+  "outcome": {
+    "winnerIndex": 0,
+    "winnerPlayerId": "1001",
+    "winnerName": "Player A"
+  }
+}

@@ -48,7 +48,7 @@ def _parser() -> argparse.ArgumentParser:
     dump = _command(commands, "dump", "Output all standard snapshots from the given replay.", _dump)
     dump.add_argument("replay", type=Path)
 
-    export = _command(commands, "export-dataset", "Export a replay directory as MatchSnapshot v1 JSONL.", _export_dataset)
+    export = _command(commands, "export-dataset", "Export a replay directory as MatchSnapshot v2 JSONL.", _export_dataset)
     export.add_argument("replay_directory", type=Path, nargs="?")
     export.add_argument("--output", type=Path, required=True)
 

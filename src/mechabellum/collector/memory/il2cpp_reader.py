@@ -25,6 +25,12 @@ class Il2CppReader:
         return self.read_uint64(address)
 
     def read_list_pointers(self, list_address: int, maximum_count: int) -> list[int]:
+        return self._read_list(list_address, maximum_count, "Q", 8)
+
+    def read_list_int32(self, list_address: int, maximum_count: int) -> list[int]:
+        return self._read_list(list_address, maximum_count, "i", 4)
+
+    def _read_list(self, list_address: int, maximum_count: int, item_format: str, item_size: int) -> list[int]:
         if list_address == 0:
             return []
         items = self.read_pointer(list_address + 0x10)
@@ -38,7 +44,7 @@ class Il2CppReader:
         capacity = self.read_uint64(items + 0x18)
         if capacity < size or capacity > maximum_count * 16:
             raise ValueError(f"Abnormal IL2CPP Array capacity: {capacity}, List size is {size}.")
-        return list(struct.unpack(f"<{size}Q", self._memory.read(items + 0x20, size * 8)))
+        return list(struct.unpack(f"<{size}{item_format}", self._memory.read(items + 0x20, size * item_size)))
 
     def read_object_class_name(self, object_address: int) -> str:
         class_address = self.read_pointer(object_address)

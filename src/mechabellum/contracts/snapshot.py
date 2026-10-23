@@ -11,7 +11,10 @@ from typing import Any, Literal
 from jsonschema import Draft202012Validator, FormatChecker
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-MATCH_SNAPSHOT_SCHEMA_VERSION = 1
+MATCH_SNAPSHOT_SCHEMA_VERSION = 2
+
+FightResult = Literal["Win", "Lose", "Deuce"]
+PlayerState = Literal["Deploying", "DeployOver", "Fighting", "FightOver", "Unknown"]
 
 
 def _to_camel(name: str) -> str:
@@ -42,6 +45,12 @@ class MatchInfo(ContractModel):
     match_mode: str | None
     round: int = Field(ge=0)
     phase: Literal["opening", "deploying", "deploy_over", "battle_start", "fighting", "fight_over", "unknown"]
+    reinforcement_offer: list[int] | None
+
+
+class EquipmentItem(ContractModel):
+    equipment_id: int = Field(ge=1)
+    durability: int | None
 
 
 class UnitDeployment(ContractModel):
@@ -54,10 +63,9 @@ class UnitDeployment(ContractModel):
     x: float
     y: float
     is_rotated: bool
-    equipment_id: int
     sell_supply: int
     round_count: int
-    durability: int
+    equipment: list[EquipmentItem]
 
 
 class UnitTechnologySet(ContractModel):
@@ -66,16 +74,58 @@ class UnitTechnologySet(ContractModel):
     technology_ids: list[int]
 
 
+class CommanderSkill(ContractModel):
+    skill_id: int = Field(ge=1)
+    slot_index: int
+    acquired_round: int | None
+    cooldown_rounds: int | None
+    is_active: bool | None
+
+
+class Building(ContractModel):
+    building_id: int = Field(ge=1)
+    index: int
+    x: float
+    y: float
+    durability: list[int] | None
+
+
+class Contraption(ContractModel):
+    contraption_id: int = Field(ge=1)
+    index: int
+    x: float
+    y: float
+
+
+class ReinforcementChoice(ContractModel):
+    status: Literal["chosen", "declined"]
+    item_id: int | None
+    offer_index: int | None
+
+
 class PlayerSnapshot(ContractModel):
     player_id: str | None
     name: str
     team: int | None
-    state: str | None
+    state: PlayerState | None
     supply: int | None
     reactor_core: int | None
-    previous_fight_result: str | None
+    max_reactor_core: int | None
+    round_supply_income: int | None
+    previous_fight_result: FightResult | None
+    fight_result_history: list[FightResult] | None
     units: list[UnitDeployment]
     active_technologies: list[UnitTechnologySet]
+    equipment_inventory: list[EquipmentItem] | None
+    commander_skills: list[CommanderSkill] | None
+    officer_ids: list[int] | None
+    buildings: list[Building] | None
+    contraptions: list[Contraption] | None
+    blueprint_ids: list[int] | None
+    energy_tower_skill_ids: list[int] | None
+    tower_strengthen_levels: list[int] | None
+    unlocked_unit_ids: list[int] | None
+    reinforcement_choice: ReinforcementChoice | None
 
 
 class MatchOutcome(ContractModel):
@@ -85,7 +135,7 @@ class MatchOutcome(ContractModel):
 
 
 class MatchSnapshot(ContractModel):
-    schema_version: Literal[1] = MATCH_SNAPSHOT_SCHEMA_VERSION
+    schema_version: Literal[2] = MATCH_SNAPSHOT_SCHEMA_VERSION
     game_build: GameBuild
     source: SnapshotSource
     match: MatchInfo
@@ -128,16 +178,16 @@ def locate_schema() -> Path:
             return path
         raise FileNotFoundError(f"File pointed to by MECHABELLUM_MATCH_SNAPSHOT_SCHEMA does not exist: {path}")
 
-    relative = Path("contracts/match-snapshot/v1/schema.json")
+    relative = Path("contracts/match-snapshot/v2/schema.json")
     candidates = [
         Path.cwd() / relative,
-        Path(sys.prefix) / "share" / "mechabellum" / "contracts" / "match-snapshot" / "v1" / "schema.json",
+        Path(sys.prefix) / "share" / "mechabellum" / "contracts" / "match-snapshot" / "v2" / "schema.json",
     ]
     candidates.extend(parent / relative for parent in Path(__file__).resolve().parents)
     for candidate in candidates:
         if candidate.is_file():
             return candidate
-    raise FileNotFoundError("Could not find contracts/match-snapshot/v1/schema.json.")
+    raise FileNotFoundError("Could not find contracts/match-snapshot/v2/schema.json.")
 
 
 @lru_cache(maxsize=8)

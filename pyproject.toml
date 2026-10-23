@@ -37,6 +37,10 @@ where = ["src"]
   "contracts/match-snapshot/v1/schema.json",
   "contracts/match-snapshot/v1/battle-start.example.json",
 ]
+"share/mechabellum/contracts/match-snapshot/v2" = [
+  "contracts/match-snapshot/v2/schema.json",
+  "contracts/match-snapshot/v2/battle-start.example.json",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

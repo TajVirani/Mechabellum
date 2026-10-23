@@ -1,15 +1,23 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, replace
 from pathlib import Path
+from typing import TypeVar
 from xml.etree import ElementTree
 
 from ...contracts import (
+    Building,
+    CommanderSkill,
+    Contraption,
+    EquipmentItem,
+    FightResult,
     GameBuild,
     MatchInfo,
     MatchOutcome,
     MatchSnapshot,
     PlayerSnapshot,
+    ReinforcementChoice,
     SnapshotSource,
     UnitDeployment,
     UnitTechnologySet,
@@ -17,15 +25,30 @@ from ...contracts import (
 from ..unit_catalog import unit_name
 from .extractor import extract_battle_record
 
+T = TypeVar("T")
+XSI_TYPE = "{http://www.w3.org/2001/XMLSchema-instance}type"
+FIGHT_RESULTS: dict[str, FightResult] = {"win": "Win", "lose": "Lose", "deuce": "Deuce"}
+
 
 @dataclass(frozen=True)
 class PlayerRound:
     round: int
     supply: int | None
     reactor_core: int | None
-    previous_fight_result: str | None
+    recorded_previous_fight_result: FightResult | None
+    recorded_fight_results: list[FightResult] | None
     units: list[UnitDeployment]
     active_technologies: list[UnitTechnologySet]
+    equipment_inventory: list[EquipmentItem] | None
+    commander_skills: list[CommanderSkill] | None
+    officer_ids: list[int] | None
+    buildings: list[Building] | None
+    contraptions: list[Contraption] | None
+    blueprint_ids: list[int] | None
+    energy_tower_skill_ids: list[int] | None
+    tower_strengthen_levels: list[int] | None
+    unlocked_unit_ids: list[int] | None
+    reinforcement_choice: ReinforcementChoice | None
 
 
 @dataclass(frozen=True)
@@ -34,6 +57,22 @@ class PlayerHistory:
     name: str
     team: int | None
     rounds: dict[int, PlayerRound]
+
+    def fight_result_history(self, round_number: int) -> list[FightResult] | None:
+        """Results of the fights before `round_number`; never includes later rounds."""
+        completed = max(0, round_number - 1)
+        # Since replay format 2340 every round record carries the full match history, so it must be truncated.
+        full = next((item.recorded_fight_results for item in self.rounds.values() if item.recorded_fight_results), None)
+        if full is not None:
+            return full[:completed] if len(full) >= completed else None
+        # Older formats only record the previous result per round: round r holds the result of fight r - 1.
+        history: list[FightResult] = []
+        for later_round in range(2, round_number + 1):
+            state = self.rounds.get(later_round)
+            if state is None or state.recorded_previous_fight_result is None:
+                return None
+            history.append(state.recorded_previous_fight_result)
+        return history
 
 
 @dataclass(frozen=True)
@@ -46,6 +85,7 @@ class ReplayMatch:
     match_mode: str | None
     winner_index: int | None
     players: list[PlayerHistory]
+    reinforcement_offers: dict[int, list[int] | None]
 
     @property
     def common_rounds(self) -> list[int]:
@@ -62,9 +102,14 @@ def parse_replay(path: Path) -> ReplayMatch:
     if root.tag != "BattleRecord":
         raise ValueError(f"Unsupported XML root element: {root.tag}")
     battle_info = root.find("BattleInfo")
-    players = [_parse_player(node) for node in root.findall("./playerRecords/PlayerRecord")]
+    player_nodes = root.findall("./playerRecords/PlayerRecord")
+    players = [_parse_player(node) for node in player_nodes]
     if not players:
         raise ValueError("Replay contains no player round records.")
+    # Current replays write team 0 for every player, which is not a real team assignment.
+    teams = [player.team for player in players]
+    if None in teams or len(set(teams)) < 2:
+        players = [replace(player, team=None) for player in players]
     return ReplayMatch(
         source_file=path.resolve(),
         version=_optional_int(root, "Version"),
@@ -74,6 +119,7 @@ def parse_replay(path: Path) -> ReplayMatch:
         match_mode=_text(battle_info, "MatchMode"),
         winner_index=_winner_index(root, len(players)),
         players=players,
+        reinforcement_offers=_reinforcement_offers(root),
     )
 
 
@@ -87,17 +133,31 @@ def select_round(replay: ReplayMatch, round_number: int | None = None) -> MatchS
         state = player.rounds.get(round_number)
         if state is None:
             raise ValueError(f"Player {player.name} has no snapshot for round {round_number}.")
+        history = player.fight_result_history(round_number)
         players.append(
             PlayerSnapshot(
                 player_id=player.player_id,
                 name=player.name,
                 team=player.team,
-                state="BattleStart",
+                state="Fighting",
                 supply=state.supply,
                 reactor_core=state.reactor_core,
-                previous_fight_result=state.previous_fight_result,
+                max_reactor_core=None,
+                round_supply_income=None,
+                previous_fight_result=history[-1] if history else None,
+                fight_result_history=history,
                 units=state.units,
                 active_technologies=state.active_technologies,
+                equipment_inventory=state.equipment_inventory,
+                commander_skills=state.commander_skills,
+                officer_ids=state.officer_ids,
+                buildings=state.buildings,
+                contraptions=state.contraptions,
+                blueprint_ids=state.blueprint_ids,
+                energy_tower_skill_ids=state.energy_tower_skill_ids,
+                tower_strengthen_levels=state.tower_strengthen_levels,
+                unlocked_unit_ids=state.unlocked_unit_ids,
+                reinforcement_choice=state.reinforcement_choice,
             )
         )
     outcome = None
@@ -116,6 +176,7 @@ def select_round(replay: ReplayMatch, round_number: int | None = None) -> MatchS
             match_mode=replay.match_mode,
             round=round_number,
             phase="battle_start",
+            reinforcement_offer=replay.reinforcement_offers.get(round_number),
         ),
         players=players,
         outcome=outcome,
@@ -142,13 +203,28 @@ def _parse_round(node: ElementTree.Element) -> PlayerRound:
         key=lambda item: item.formation_index,
     )
     technologies = [_parse_technologies(item) for item in node.findall("./playerData/activeTechnologies/UnitData")]
+    recorded_results = None
+    if data is not None and data.find("roundFightResult") is not None:
+        parsed = [_fight_result(item.text) for item in data.findall("./roundFightResult/FightResultType")]
+        recorded_results = None if None in parsed else [item for item in parsed if item is not None]
     return PlayerRound(
         round=_int(node, "round"),
         supply=_optional_int(data, "supply"),
         reactor_core=_optional_int(data, "reactorCore"),
-        previous_fight_result=_text(data, "preRoundFightResult"),
+        recorded_previous_fight_result=_fight_result(_text(data, "preRoundFightResult")),
+        recorded_fight_results=recorded_results,
         units=units,
         active_technologies=technologies,
+        equipment_inventory=_parse_list(data, "equipmentDatas", "EquipmentData", _parse_inventory_item),
+        commander_skills=_parse_list(data, "commanderSkills", "CommanderSkillData", _parse_commander_skill),
+        officer_ids=_int_list(data, "officers"),
+        buildings=_parse_list(data, "constructionSnapshotDatas", "ConstructionSnapshotData", _parse_building),
+        contraptions=_parse_list(data, "contraptions", "ContraptionData", _parse_contraption),
+        blueprint_ids=_int_list(data, "bluepints"),
+        energy_tower_skill_ids=_int_list(data, "energyTowerSkills"),
+        tower_strengthen_levels=_int_list(data, "towerStrengthenLevels"),
+        unlocked_unit_ids=_int_list(data, "shop/unlockedUnits"),
+        reinforcement_choice=_parse_reinforcement_choice(node),
     )
 
 
@@ -156,6 +232,15 @@ def _parse_unit(node: ElementTree.Element) -> UnitDeployment:
     unit_id = _int(node, "id")
     raw_level = _int(node, "Level")
     position = node.find("Position")
+    equipment = [
+        EquipmentItem(equipment_id=equipment_id, durability=None)
+        for item in node.findall("./equipments/equipment")
+        if (equipment_id := _int_attribute(item, "data")) > 0
+    ]
+    # Older formats stored a single item in EquipmentID; current ones leave it 0 and use the equipments list.
+    legacy_id = _int(node, "EquipmentID")
+    if legacy_id > 0 and all(item.equipment_id != legacy_id for item in equipment):
+        equipment.insert(0, EquipmentItem(equipment_id=legacy_id, durability=_optional_int(node, "Durability")))
     return UnitDeployment(
         unit_id=unit_id,
         unit_name=unit_name(unit_id),
@@ -166,10 +251,9 @@ def _parse_unit(node: ElementTree.Element) -> UnitDeployment:
         x=_float(position, "x"),
         y=_float(position, "y"),
         is_rotated=(_text(node, "IsRotate") or "").lower() == "true",
-        equipment_id=_int(node, "EquipmentID"),
         sell_supply=_int(node, "SellSupply"),
         round_count=_int(node, "RoundCount"),
-        durability=_int(node, "Durability"),
+        equipment=equipment,
     )
 
 
@@ -177,13 +261,108 @@ def _parse_technologies(node: ElementTree.Element) -> UnitTechnologySet:
     unit_id = _int(node, "id")
     ids = []
     for technology in node.findall("./techs/tech"):
-        try:
-            value = int(technology.attrib.get("data", "0"))
-        except ValueError:
-            value = 0
+        value = _int_attribute(technology, "data")
         if value > 0:
             ids.append(value)
     return UnitTechnologySet(unit_id=unit_id, unit_name=unit_name(unit_id), technology_ids=ids)
+
+
+def _parse_inventory_item(node: ElementTree.Element) -> EquipmentItem | None:
+    equipment_id = _int(node, "id")
+    if equipment_id <= 0:
+        return None
+    return EquipmentItem(equipment_id=equipment_id, durability=_optional_int(node, "durability"))
+
+
+def _parse_commander_skill(node: ElementTree.Element) -> CommanderSkill | None:
+    skill_id = _int(node, "id")
+    if skill_id <= 0:
+        return None
+    active = _text(node, "isActive")
+    return CommanderSkill(
+        skill_id=skill_id,
+        slot_index=_int(node, "index"),
+        acquired_round=_optional_int(node, "getRound"),
+        cooldown_rounds=_optional_int(node, "coolingRound"),
+        is_active=None if active is None else active.lower() == "true",
+    )
+
+
+def _parse_building(node: ElementTree.Element) -> Building | None:
+    building_id = _int(node, "ID")
+    if building_id <= 0:
+        return None
+    position = node.find("Position")
+    return Building(
+        building_id=building_id,
+        index=_int(node, "Index"),
+        x=_float(position, "x"),
+        y=_float(position, "y"),
+        durability=_int_list(node, "durability"),
+    )
+
+
+def _parse_contraption(node: ElementTree.Element) -> Contraption | None:
+    contraption_id = _int(node, "id")
+    if contraption_id <= 0:
+        return None
+    position = node.find("position")
+    return Contraption(
+        contraption_id=contraption_id, index=_int(node, "index"), x=_float(position, "x"), y=_float(position, "y")
+    )
+
+
+def _parse_reinforcement_choice(node: ElementTree.Element) -> ReinforcementChoice | None:
+    choices = [
+        action
+        for action in node.findall("./actionRecords/*")
+        if action.attrib.get(XSI_TYPE) == "PAD_ChooseReinforceItem"
+    ]
+    if not choices:
+        return None
+    item_id = _int(choices[-1], "ID")
+    if item_id <= 0:
+        return ReinforcementChoice(status="declined", item_id=None, offer_index=None)
+    return ReinforcementChoice(status="chosen", item_id=item_id, offer_index=_optional_int(choices[-1], "Index"))
+
+
+def _reinforcement_offers(root: ElementTree.Element) -> dict[int, list[int] | None]:
+    offers: dict[int, list[int] | None] = {}
+    for data in root.findall("./matchDatas/MatchSnapshotData"):
+        round_number = _optional_int(data, "round")
+        container = data.find("reinforceItems")
+        if round_number is None or container is None:
+            continue
+        arrays = container.findall("ArrayOfInt")
+        # Both players are dealt the same offer; more than one array has not been observed and is left unknown.
+        if not arrays:
+            offers[round_number] = []
+        elif len(arrays) == 1:
+            offers[round_number] = [_int_text(item) for item in arrays[0].findall("int")]
+        else:
+            offers[round_number] = None
+    return offers
+
+
+def _parse_list(
+    parent: ElementTree.Element | None,
+    container: str,
+    item: str,
+    parse: Callable[[ElementTree.Element], T | None],
+) -> list[T] | None:
+    if parent is None or parent.find(container) is None:
+        return None
+    return [parsed for node in parent.findall(f"./{container}/{item}") if (parsed := parse(node)) is not None]
+
+
+def _int_list(parent: ElementTree.Element | None, container: str) -> list[int] | None:
+    if parent is None or parent.find(container) is None:
+        return None
+    return [_int_text(node) for node in parent.findall(f"./{container}/int")]
+
+
+def _fight_result(value: str | None) -> FightResult | None:
+    return FIGHT_RESULTS.get((value or "").strip().lower())
 
 
 def _winner_index(root: ElementTree.Element, player_count: int) -> int | None:
@@ -215,6 +394,20 @@ def _optional_int(parent: ElementTree.Element | None, name: str) -> int | None:
 
 def _int(parent: ElementTree.Element | None, name: str) -> int:
     return _optional_int(parent, name) or 0
+
+
+def _int_text(node: ElementTree.Element) -> int:
+    try:
+        return int((node.text or "").strip())
+    except ValueError:
+        return 0
+
+
+def _int_attribute(node: ElementTree.Element, name: str) -> int:
+    try:
+        return int(node.attrib.get(name, "0"))
+    except ValueError:
+        return 0
 
 
 def _float(parent: ElementTree.Element | None, name: str) -> float:

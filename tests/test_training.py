@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_training_and_prediction_pipeline(tmp_path: Path) -> None:
-    example = json.loads((ROOT / "contracts/match-snapshot/v1/battle-start.example.json").read_text(encoding="utf-8"))
+    example = json.loads((ROOT / "contracts/match-snapshot/v2/battle-start.example.json").read_text(encoding="utf-8"))
     snapshots = []
     for index in range(10):
         data = deepcopy(example)

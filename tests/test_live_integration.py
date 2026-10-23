@@ -3,6 +3,7 @@ import os
 import pytest
 
 from mechabellum.collector.memory import LiveMemorySource
+from mechabellum.collector.memory.layouts import SUPPORTED_LAYOUTS
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows integration test")
@@ -15,5 +16,5 @@ def test_live_root_matches_supported_layout() -> None:
         raise
     with source:
         status = source.get_status()
-        assert status.layout_replay_version == 2119
+        assert status.layout_replay_version in {layout.replay_version for layout in SUPPORTED_LAYOUTS}
         assert status.root_class == "MatchClient"

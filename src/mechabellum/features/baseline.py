@@ -147,7 +147,7 @@ def _player_stats(player: PlayerSnapshot) -> PlayerStats:
         board_sell_supply += unit.sell_supply
         level_sum += unit.display_level
         experience += unit.experience
-        equipment_count += float(unit.equipment_id > 0)
+        equipment_count += float(len(unit.equipment))
         xs.append(unit.x)
         ys.append(unit.y)
 

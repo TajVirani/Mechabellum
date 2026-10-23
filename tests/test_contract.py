@@ -11,17 +11,23 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_contract_example_round_trips() -> None:
-    data = json.loads((ROOT / "contracts/match-snapshot/v1/battle-start.example.json").read_text(encoding="utf-8"))
+    data = json.loads((ROOT / "contracts/match-snapshot/v2/battle-start.example.json").read_text(encoding="utf-8"))
     snapshot = validate_snapshot(data)
-    assert snapshot.schema_version == 1
+    assert snapshot.schema_version == 2
     assert snapshot.match.phase == "battle_start"
     assert snapshot_to_dict(snapshot) == data
     assert json.loads(snapshot_to_json(snapshot)) == data
 
 
 def test_missing_required_field_is_rejected() -> None:
-    data = json.loads((ROOT / "contracts/match-snapshot/v1/battle-start.example.json").read_text(encoding="utf-8"))
+    data = json.loads((ROOT / "contracts/match-snapshot/v2/battle-start.example.json").read_text(encoding="utf-8"))
     invalid = deepcopy(data)
     del invalid["players"][0]["reactorCore"]
     with pytest.raises(ValidationError):
         validate_snapshot(invalid)
+
+
+def test_v1_document_is_rejected() -> None:
+    data = json.loads((ROOT / "contracts/match-snapshot/v1/battle-start.example.json").read_text(encoding="utf-8"))
+    with pytest.raises(ValidationError):
+        validate_snapshot(data)
