@@ -34,6 +34,8 @@ class PlayerOffsets:
     supply: int
     state: int
     reactor_core: int
+    # PlayerBaseInfo.eloScore, the 1v1 rating.
+    elo_score: int | None
     max_reactor_core: int | None
     round_supply_income: int | None
     # Exactly one of these is set: older builds keep the previous result, newer ones a List<FightResult>.
@@ -153,6 +155,7 @@ LAYOUT_1_11_0_2A = MemoryLayout(
         supply=0xEC,
         state=0x108,
         reactor_core=0x134,
+        elo_score=None,
         max_reactor_core=None,
         round_supply_income=None,
         previous_fight_result=0x158,
@@ -182,6 +185,7 @@ LAYOUT_2_0_0_5 = MemoryLayout(
         supply=0xF4,
         state=0x110,
         reactor_core=0x13C,
+        elo_score=0x74,
         max_reactor_core=0x144,
         round_supply_income=0x14C,
         previous_fight_result=None,

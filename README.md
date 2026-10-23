@@ -70,11 +70,24 @@ Check the memory layout, read one live snapshot, or continuously watch for chang
 .venv\Scripts\mecha live-watch --json --interval 500
 ```
 
+Record every distinct live snapshot of the matches you spectate, with capture timestamps, appending to a JSONL file:
+
+```powershell
+.venv\Scripts\mecha live-record --output data\live\recordings.jsonl --stop-after-idle 120
+```
+
 Train a model and view round-by-round win probabilities for a match:
 
 ```powershell
 .venv\Scripts\mecha train --dataset data\match-snapshots.v2.jsonl
 .venv\Scripts\mecha timeline data\match-snapshots.v2.jsonl
+```
+
+`--split time` holds out the newest matches instead of random ones, and `--calibration sigmoid` or `--calibration isotonic` fits a probability map on a further slice of matches. The training metadata, and `mecha evaluate` on a separate dataset, report accuracy and calibration overall and by round, map, replay version, game mode and rating tier:
+
+```powershell
+.venv\Scripts\mecha train --dataset data\match-snapshots.v2.jsonl --split time --calibration sigmoid
+.venv\Scripts\mecha evaluate data\held-out.jsonl --model artifacts\win_model.joblib
 ```
 
 While spectating, output both players' final win probabilities when each round's fight ends:

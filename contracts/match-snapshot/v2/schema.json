@@ -82,7 +82,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "playerId", "name", "team", "state", "supply", "reactorCore", "maxReactorCore", "roundSupplyIncome",
+        "playerId", "name", "team", "rating", "state", "supply", "reactorCore", "maxReactorCore", "roundSupplyIncome",
         "previousFightResult", "fightResultHistory", "units", "activeTechnologies", "equipmentInventory",
         "commanderSkills", "officerIds", "buildings", "contraptions", "blueprintIds", "energyTowerSkillIds",
         "towerStrengthenLevels", "unlockedUnitIds", "reinforcementChoice"
@@ -91,6 +91,7 @@
         "playerId": { "$ref": "#/$defs/nullableString" },
         "name": { "type": "string" },
         "team": { "$ref": "#/$defs/nullableInteger" },
+        "rating": { "$ref": "#/$defs/nullableInteger" },
         "state": {
           "oneOf": [
             { "type": "null" },

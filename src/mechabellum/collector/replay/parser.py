@@ -154,6 +154,7 @@ def select_round(replay: ReplayMatch, round_number: int | None = None) -> MatchS
                 player_id=player.player_id,
                 name=player.name,
                 team=player.team,
+                rating=None,
                 state="FightOver",
                 supply=state.supply,
                 reactor_core=state.reactor_core,

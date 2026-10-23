@@ -211,6 +211,7 @@ class LiveMemorySource:
             player_id=str(player_id),
             name=name,
             team=self._read_team_index(controller),
+            rating=self._read_optional_int32(player, offsets.elo_score),
             state=state,
             supply=self._memory.read_int32(player + offsets.supply),
             reactor_core=self._memory.read_int32(player + offsets.reactor_core),

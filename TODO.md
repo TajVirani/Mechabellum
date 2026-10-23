@@ -7,10 +7,11 @@
 - [x] Split training and test sets by whole `battleId`
 - [x] Extract aggregate features for core, supply, formations, levels, experience, equipment, technologies, and positioning
 - [x] Train a player-symmetric probability baseline and support `live-predict` inference
-- [ ] Accumulate at least 5,000 same-version 1v1 matches and perform time-split probability calibration
-- [ ] Add evaluation reports broken down by round, map, rank tier, and version
+- [x] Time-split training (`--split time`) and probability calibration (`--calibration sigmoid|isotonic`)
+- [ ] Accumulate at least 5,000 same-version 1v1 matches so time-split calibration has enough data
+- [x] Add evaluation reports broken down by round, map, rank tier, and version (`mecha evaluate`; replays carry no rating, so rank tiers need live recordings)
 - [x] Read live player phase and predict once per round when both players reach `FightOver`
-- [ ] Add a stable JSONL recorder for live snapshots, with timestamps
+- [x] Add a stable JSONL recorder for live snapshots, with timestamps (`mecha live-record`)
 
 ## P1A: Complete data collection
 

@@ -4,18 +4,24 @@ import hashlib
 import json
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Literal
 
 import numpy as np
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, brier_score_loss, log_loss, roc_auc_score
+from sklearn.metrics import log_loss
 from sklearn.model_selection import GroupKFold, GroupShuffleSplit
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
 from ..contracts import MATCH_SNAPSHOT_SCHEMA_VERSION, MODEL_SNAPSHOT_PHASE
 from ..datasets import load_training_snapshots
-from ..features import build_features, feature_names
+from ..features import feature_names
 from ..models import create_artifact, save_artifact
+from .calibration import CalibratedModel
+from .evaluation import EvaluationRows, evaluation_report
+
+SplitMode = Literal["group", "time"]
+CalibrationMethod = Literal["none", "sigmoid", "isotonic"]
 
 
 def train_model(
@@ -25,7 +31,17 @@ def train_model(
     test_size: float = 0.25,
     seed: int = 20260711,
     regularization: float | None = None,
+    split: SplitMode = "group",
+    calibration: CalibrationMethod = "none",
+    calibration_size: float = 0.2,
 ) -> dict[str, object]:
+    """Train the win model.
+
+    `split="group"` holds out random whole matches; `split="time"` holds out the newest matches by battle id, so
+    the test set measures performance on games played after the training data. With calibration, a further slice
+    of matches (the newest before the test set, for a time split) fits a sigmoid or isotonic map on top of the
+    trained model.
+    """
     dataset_path = dataset_path.resolve()
     snapshots = load_training_snapshots(dataset_path)
     battle_ids = {snapshot.match.battle_id for snapshot in snapshots}
@@ -34,38 +50,32 @@ def train_model(
     if len(battle_ids) < 10:
         raise ValueError(f"Only {len(battle_ids)} usable 1v1 matches; at least 10 are required for a validation split.")
 
-    rows: list[np.ndarray] = []
-    labels: list[int] = []
-    groups: list[str] = []
-    rounds: list[int] = []
-    for snapshot in snapshots:
-        if snapshot.outcome is None or snapshot.match.battle_id is None:
-            raise ValueError("Training snapshot is missing outcome or match.battleId.")
-        winner_index = snapshot.outcome.winner_index
-        battle_id = snapshot.match.battle_id
-        round_number = snapshot.match.round
-        for perspective in (0, 1):
-            rows.append(build_features(snapshot, perspective))
-            labels.append(int(perspective == winner_index))
-            groups.append(battle_id)
-            rounds.append(round_number)
-
-    x = np.vstack(rows)
-    y = np.asarray(labels, dtype=np.int8)
-    group_values = np.asarray(groups)
-    round_values = np.asarray(rounds)
-    splitter = GroupShuffleSplit(n_splits=1, test_size=test_size, random_state=seed)
-    train_indices, test_indices = next(splitter.split(x, y, group_values))
+    rows = EvaluationRows.from_snapshots(snapshots)
+    fit_indices, test_indices = _split(rows.battle_ids, test_size, split, seed)
+    calibration_indices = np.asarray([], dtype=int)
+    if calibration != "none":
+        fit_part, calibration_part = _split(rows.battle_ids[fit_indices], calibration_size, split, seed)
+        fit_indices, calibration_indices = fit_indices[fit_part], fit_indices[calibration_part]
+    fit = rows.subset(fit_indices)
+    test = rows.subset(test_indices)
 
     selected_regularization, cross_validation = _select_regularization(
-        x[train_indices], y[train_indices], group_values[train_indices], seed, regularization
+        fit.x, fit.y, fit.battle_ids, seed, regularization
     )
     model = _new_model(selected_regularization, seed)
-    model.fit(x[train_indices], y[train_indices])
-    probabilities = model.predict_proba(x[test_indices])[:, 1]
-    metrics = _metrics(y[test_indices], probabilities)
+    model.fit(fit.x, fit.y)
+    final_model: object = model
+    if calibration != "none":
+        held = rows.subset(calibration_indices)
+        if len(set(held.y.tolist())) < 2:
+            raise ValueError("The calibration slice holds only one class; use more matches or no calibration.")
+        final_model = CalibratedModel(model, calibration).fit(held.x, held.y)
+    probabilities = final_model.predict_proba(test.x)[:, 1]  # type: ignore[attr-defined]
+    report = evaluation_report(test, probabilities)
+    if calibration != "none":
+        report["uncalibrated"] = evaluation_report(test, model.predict_proba(test.x)[:, 1])["metrics"]
 
-    save_artifact(output_path, create_artifact(model, feature_names()))
+    save_artifact(output_path, create_artifact(final_model, feature_names()))
 
     metadata: dict[str, object] = {
         "createdAtUtc": datetime.now(UTC).isoformat(),
@@ -74,12 +84,16 @@ def train_model(
         "matchSnapshotSchemaVersion": MATCH_SNAPSHOT_SCHEMA_VERSION,
         "featureSchemaVersion": 1,
         "snapshotPhase": MODEL_SNAPSHOT_PHASE,
+        "split": split,
+        "calibration": calibration,
         "inputSnapshotCount": len(snapshots),
         "usableMatchCount": len(battle_ids),
-        "trainingMatchCount": len(set(group_values[train_indices])),
-        "testMatchCount": len(set(group_values[test_indices])),
-        "trainingSampleCount": int(len(train_indices)),
+        "trainingMatchCount": len(set(fit.battle_ids.tolist())),
+        "calibrationMatchCount": len(set(rows.battle_ids[calibration_indices].tolist())),
+        "testMatchCount": len(set(test.battle_ids.tolist())),
+        "trainingSampleCount": int(len(fit_indices)),
         "testSampleCount": int(len(test_indices)),
+        "testBattleIdRange": [min(test.battle_ids.tolist()), max(test.battle_ids.tolist())],
         "replayVersions": sorted(
             {
                 snapshot.game_build.replay_version
@@ -89,11 +103,30 @@ def train_model(
         ),
         "selectedRegularization": selected_regularization,
         "crossValidation": cross_validation,
-        "metrics": metrics,
-        "metricsByRound": _metrics_by_round(y[test_indices], probabilities, round_values[test_indices]),
+        "metrics": report["metrics"],
+        "evaluation": report,
     }
     output_path.with_suffix(".json").write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
     return metadata
+
+
+def battle_order_key(battle_id: str) -> tuple[int, ...]:
+    """Battle ids look like `20261024--67150459`: the date, then a running number. Sort by both."""
+    parts = [part for part in battle_id.replace("-", " ").split() if part.isdigit()]
+    return tuple(int(part) for part in parts) or (0,)
+
+
+def _split(battle_ids: np.ndarray, size: float, mode: SplitMode, seed: int) -> tuple[np.ndarray, np.ndarray]:
+    """Indices of the kept rows and the held-out rows; whole matches always stay on one side."""
+    if mode == "group":
+        splitter = GroupShuffleSplit(n_splits=1, test_size=size, random_state=seed)
+        kept, held = next(splitter.split(np.zeros(len(battle_ids)), groups=battle_ids))
+        return kept, held
+    ordered = sorted(set(battle_ids.tolist()), key=battle_order_key)
+    held_count = max(1, round(len(ordered) * size))
+    held_ids = set(ordered[-held_count:])
+    held_mask = np.asarray([battle_id in held_ids for battle_id in battle_ids.tolist()])
+    return np.flatnonzero(~held_mask), np.flatnonzero(held_mask)
 
 
 def _new_model(regularization: float, seed: int) -> Pipeline:
@@ -133,25 +166,3 @@ def _select_regularization(
         )
     selected = min(results, key=lambda result: result["meanLogLoss"])["regularization"]
     return selected, results
-
-
-def _metrics(labels: np.ndarray, probabilities: np.ndarray) -> dict[str, float]:
-    return {
-        "accuracy": float(accuracy_score(labels, probabilities >= 0.5)),
-        "rocAuc": float(roc_auc_score(labels, probabilities)),
-        "logLoss": float(log_loss(labels, probabilities)),
-        "brier": float(brier_score_loss(labels, probabilities)),
-    }
-
-
-def _metrics_by_round(
-    labels: np.ndarray, probabilities: np.ndarray, rounds: np.ndarray
-) -> dict[str, dict[str, float | int]]:
-    result = {}
-    for round_number in sorted(set(rounds.tolist())):
-        mask = rounds == round_number
-        result[str(round_number)] = {
-            "samples": int(mask.sum()),
-            **_metrics(labels[mask], probabilities[mask]),
-        }
-    return result

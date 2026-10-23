@@ -109,6 +109,8 @@ class PlayerSnapshot(ContractModel):
     player_id: str | None
     name: str
     team: int | None
+    # The player's rating for the match's mode (1v1 Elo); only live memory records it.
+    rating: int | None
     state: PlayerState | None
     supply: int | None
     reactor_core: int | None

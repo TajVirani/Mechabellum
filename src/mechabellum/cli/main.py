@@ -31,7 +31,9 @@ def main() -> int:
 
 
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="mecha", description="Mechabellum data collection, training, and win probability inference.")
+    parser = argparse.ArgumentParser(
+        prog="mecha", description="Mechabellum data collection, training, and win probability inference."
+    )
     commands = parser.add_subparsers(dest="command")
 
     _command(commands, "probe", "Locate the game, replays, and logs.", _probe)
@@ -48,7 +50,9 @@ def _parser() -> argparse.ArgumentParser:
     dump = _command(commands, "dump", "Output all standard snapshots from the given replay.", _dump)
     dump.add_argument("replay", type=Path)
 
-    export = _command(commands, "export-dataset", "Export a replay directory as MatchSnapshot v2 JSONL.", _export_dataset)
+    export = _command(
+        commands, "export-dataset", "Export a replay directory as MatchSnapshot v2 JSONL.", _export_dataset
+    )
     export.add_argument("replay_directory", type=Path, nargs="?")
     export.add_argument("--output", type=Path, required=True)
 
@@ -58,7 +62,22 @@ def _parser() -> argparse.ArgumentParser:
     watch = _command(commands, "live-watch", "Continuously output live match snapshots when they change.", _live_watch)
     watch.add_argument("--interval", type=int, default=1000, help="Polling interval in milliseconds, range 250-30000.")
     watch.add_argument("--json", action="store_true")
-    live_predict = _command(commands, "live-predict", "Output final win probabilities when each round's fight ends.", _live_predict)
+    live_record = _command(
+        commands, "live-record", "Append every distinct live snapshot to a JSONL file.", _live_record
+    )
+    live_record.add_argument("--output", type=Path, required=True, help="JSONL file; new snapshots are appended.")
+    live_record.add_argument(
+        "--interval", type=int, default=1000, help="Polling interval in milliseconds, range 250-30000."
+    )
+    live_record.add_argument(
+        "--stop-after-idle",
+        type=int,
+        metavar="SECONDS",
+        help="Stop once no match has been readable for this long after recording started.",
+    )
+    live_predict = _command(
+        commands, "live-predict", "Output final win probabilities when each round's fight ends.", _live_predict
+    )
     live_predict.add_argument("--interval", type=int, default=500)
     live_predict.add_argument("--model", type=Path, default=Path("artifacts/win_model.joblib"))
 
@@ -68,6 +87,22 @@ def _parser() -> argparse.ArgumentParser:
     train.add_argument("--test-size", type=float, default=0.25)
     train.add_argument("--seed", type=int, default=20260711)
     train.add_argument("--regularization", type=float)
+    train.add_argument(
+        "--split", choices=("group", "time"), default="group", help="Hold out random matches, or the newest ones."
+    )
+    train.add_argument("--calibration", choices=("none", "sigmoid", "isotonic"), default="none")
+    train.add_argument(
+        "--calibration-size", type=float, default=0.2, help="Share of training matches used for calibration."
+    )
+
+    evaluate = _command(
+        commands,
+        "evaluate",
+        "Report a saved model's accuracy and calibration on a dataset, by round, map, version, mode and rating tier.",
+        _evaluate,
+    )
+    evaluate.add_argument("dataset", type=Path)
+    evaluate.add_argument("--model", type=Path, default=Path("artifacts/win_model.joblib"))
 
     predict = _command(commands, "predict", "Compute final win probabilities for one MatchSnapshot.", _predict)
     predict.add_argument("--input", type=Path, help="JSON file; reads standard input when omitted.")
@@ -173,6 +208,39 @@ def _live_watch(args: argparse.Namespace) -> None:
             time.sleep(interval)
 
 
+def _live_record(args: argparse.Namespace) -> None:
+    from ..collector.memory import LiveMemorySource, RecorderStats, record_live_snapshots
+
+    interval = _interval(args.interval)
+    idle_limit = args.stop_after_idle
+
+    def should_stop(stats: RecorderStats) -> bool:
+        return (
+            idle_limit is not None
+            and stats.last_read_at is not None
+            and time.monotonic() - stats.last_read_at > idle_limit
+        )
+
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    with LiveMemorySource.attach() as source, args.output.open("a", encoding="utf-8", newline="\n") as stream:
+        try:
+            stats = record_live_snapshots(
+                source,
+                stream,
+                interval_seconds=interval,
+                should_stop=should_stop,
+                on_message=lambda message: print(message, file=sys.stderr, flush=True),
+            )
+        except KeyboardInterrupt:
+            print("Recording stopped.", file=sys.stderr)
+            return
+    print(
+        f"Recorded {stats.written} snapshots from {len(stats.matches)} match(es); "
+        f"{stats.skipped_unchanged} unchanged polls skipped, {stats.read_errors} read errors retried.",
+        file=sys.stderr,
+    )
+
+
 def _live_predict(args: argparse.Namespace) -> None:
     from ..collector.memory import LiveMemorySource, ObserverStateError
     from ..features import feature_names
@@ -208,8 +276,17 @@ def _train(args: argparse.Namespace) -> None:
         test_size=args.test_size,
         seed=args.seed,
         regularization=args.regularization,
+        split=args.split,
+        calibration=args.calibration,
+        calibration_size=args.calibration_size,
     )
     print(json.dumps(metadata, ensure_ascii=False, indent=2))
+
+
+def _evaluate(args: argparse.Namespace) -> None:
+    from ..training import evaluate_model
+
+    print(json.dumps(evaluate_model(args.dataset, args.model), ensure_ascii=False, indent=2))
 
 
 def _predict(args: argparse.Namespace) -> None:
