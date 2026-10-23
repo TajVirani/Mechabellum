@@ -92,7 +92,6 @@ class PlayerModuleOffsets:
     record_index: int
     record_source: int
     record_positions: int
-    record_is_old: int
     contraption_data: int
     shop: int
     shop_unlocked_units: int
@@ -222,7 +221,6 @@ LAYOUT_2_0_0_5 = MemoryLayout(
         record_index=0x10,
         record_source=0x18,
         record_positions=0x20,
-        record_is_old=0x30,
         contraption_data=0x18,
         shop=0x40,
         shop_unlocked_units=0x28,

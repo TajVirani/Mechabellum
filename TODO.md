@@ -2,22 +2,24 @@
 
 ## P0: Spectator win probability baseline
 
-- [x] Generate winner labels from the final `FightReport` of 1v1 replays
-- [x] Fix the `battle_start` sampling definition and exclude the `round 0` opening selection state
+- [x] Generate winner labels from the final `teamRanks` of 1v1 replays (the last `FightReport` describes the second-to-last fight)
+- [x] Sample each round at `fight_over`, matching what replays record, and exclude the `round 0` opening selection state
 - [x] Split training and test sets by whole `battleId`
 - [x] Extract aggregate features for core, supply, formations, levels, experience, equipment, technologies, and positioning
 - [x] Train a player-symmetric probability baseline and support `live-predict` inference
 - [ ] Accumulate at least 5,000 same-version 1v1 matches and perform time-split probability calibration
 - [ ] Add evaluation reports broken down by round, map, rank tier, and version
-- [x] Read live player phase and predict once per round when both players enter `Fighting`
+- [x] Read live player phase and predict once per round when both players reach `FightOver`
 - [ ] Add a stable JSONL recorder for live snapshots, with timestamps
 
 ## P1A: Complete data collection
 
 - [ ] Parse replay `actionRecords`: purchases, unlocks, upgrades, technologies, moves, equipment, and abilities
-- [ ] Output each round's dealt card candidates `reinforceItems` and the player's final choice `PAD_ChooseReinforceItem`
-- [ ] Output opening lineup choice, specialists, commander abilities, shop unlocks, and building state
-- [ ] Read the current round's candidate and chosen cards from the live `ReinforcementManager`
+- [x] Output each round's dealt card candidates `reinforceItems` and the player's final choice `PAD_ChooseReinforceItem`
+- [x] Output specialists, commander abilities, shop unlocks, and building state
+- [ ] Output the opening lineup choice
+- [x] Read the current round's candidate and chosen cards from the live `ReinforcementManager`
+- [ ] Map live blueprint and energy tower skill ids to the values replays record
 - [ ] Build ID-to-name/cost tables for cards, technologies, equipment, and specialists
 
 ## P1B: Complete position description

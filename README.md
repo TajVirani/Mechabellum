@@ -2,11 +2,11 @@
 
 A research project for Mechabellum spectator analytics. It combines `.grbr` replay parsing, read-only live collection on Windows, versioned match snapshot data, dataset generation, model training, and round-by-round final win probability inference in a single Python package.
 
-The project uses `MatchSnapshot v1` as its formal data boundary:
+The project uses `MatchSnapshot v2` as its formal data boundary:
 
 ```text
 .grbr replay ─────┐
-                  ├─ collector ─→ MatchSnapshot v1 ─→ datasets ─→ training ─→ model
+                  ├─ collector ─→ MatchSnapshot v2 ─→ datasets ─→ training ─→ model
 live process ─────┘                        └──────────────────────→ inference
 ```
 
@@ -25,10 +25,10 @@ See the **[replay collection repository](https://github.com/FogMoe/Mechabellum-R
 
 - Parse `.grbr` replays and output a `fight_over` snapshot for each round
 - Read both players' deployments while spectating via Windows `ReadProcessMemory`
-- Record players, rounds, economy, units, levels, experience, coordinates, equipment, and technologies
-- Export a replay directory as a `MatchSnapshot v1` JSONL dataset
+- Record players, rounds, economy, units, levels, experience, coordinates, equipment (up to two items per unit), technologies, fight history, card offers and choices, commander skills, officers, buildings, contraptions, and unlocked units
+- Export a replay directory as a `MatchSnapshot v2` JSONL dataset
 - Split training and test sets by whole match and train a player-symmetric win probability baseline
-- Compute final win probabilities for a single position, a full match timeline, or the live battle start position
+- Compute final win probabilities for a single position, a full match timeline, or live at the end of each round's fight
 
 ## Installation
 
@@ -59,7 +59,7 @@ Read the latest replay, or export a trainable dataset:
 
 ```powershell
 .venv\Scripts\mecha latest --json
-.venv\Scripts\mecha export-dataset --output data\match-snapshots.v1.jsonl
+.venv\Scripts\mecha export-dataset --output data\match-snapshots.v2.jsonl
 ```
 
 Check the memory layout, read one live snapshot, or continuously watch for changes:
@@ -73,11 +73,11 @@ Check the memory layout, read one live snapshot, or continuously watch for chang
 Train a model and view round-by-round win probabilities for a match:
 
 ```powershell
-.venv\Scripts\mecha train --dataset data\match-snapshots.v1.jsonl
-.venv\Scripts\mecha timeline data\match-snapshots.v1.jsonl
+.venv\Scripts\mecha train --dataset data\match-snapshots.v2.jsonl
+.venv\Scripts\mecha timeline data\match-snapshots.v2.jsonl
 ```
 
-While spectating, output both players' final win probabilities at the start of each round's battle:
+While spectating, output both players' final win probabilities when each round's fight ends:
 
 ```powershell
 .venv\Scripts\mecha live-predict --model artifacts\win_model.joblib
@@ -90,7 +90,7 @@ All commands and options are listed by `.venv\Scripts\mecha --help` and each sub
 ```text
 Mechabellum/
 ├─ pyproject.toml
-├─ contracts/match-snapshot/v1/     # JSON Schema and example
+├─ contracts/match-snapshot/v2/     # JSON Schema and example (v1 kept as a record)
 ├─ src/mechabellum/
 │  ├─ collector/                     # Replay and live memory data sources
 │  ├─ contracts/                     # Strongly typed MatchSnapshot
@@ -110,7 +110,7 @@ See [Architecture](docs/architecture.md) for module boundaries and dependency di
 
 ## Data contract
 
-The specification is at [contracts/match-snapshot/v1/schema.json](contracts/match-snapshot/v1/schema.json), with a readable example at [battle-start.example.json](contracts/match-snapshot/v1/battle-start.example.json). Collection, datasets, training, and inference entry points all use the same set of Pydantic models and run JSON Schema validation at persistence boundaries.
+The specification is at [contracts/match-snapshot/v2/schema.json](contracts/match-snapshot/v2/schema.json), with a readable example at [fight-over.example.json](contracts/match-snapshot/v2/fight-over.example.json); [contracts/README.md](contracts/README.md) explains snapshot timing and field semantics. Collection, datasets, training, and inference entry points all use the same set of Pydantic models and run JSON Schema validation at persistence boundaries.
 
 ## Verification
 
@@ -119,7 +119,7 @@ The specification is at [contracts/match-snapshot/v1/schema.json](contracts/matc
 .venv\Scripts\pytest -q
 ```
 
-Live collection depends on a supported game build and `GameAssembly.dll` hash. After a game update, run `mecha live-probe` first and complete version validation as described in the memory layout document.
+Live collection depends on a supported game build and `GameAssembly.dll` hash; game 2.0.0.5 (replay format 2340) and 1.11.0.2a are supported. After a game update, run `mecha live-probe` first and complete version validation as described in the memory layout document.
 
 ## License
 

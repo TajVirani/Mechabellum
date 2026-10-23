@@ -8,9 +8,9 @@ Mechabellum/
 ├─ TODO.md
 ├─ pyproject.toml
 ├─ contracts/
-│  └─ match-snapshot/v1/
+│  └─ match-snapshot/v2/            (v1/ kept as a record)
 │     ├─ schema.json
-│     └─ battle-start.example.json
+│     └─ fight-over.example.json
 ├─ src/mechabellum/
 │  ├─ collector/
 │  │  ├─ memory/
@@ -40,7 +40,7 @@ Mechabellum/
 
 ```text
                      ┌─ replay extractor/parser ─┐
-Mechabellum data ────┤                            ├─→ MatchSnapshot v1
+Mechabellum data ────┤                            ├─→ MatchSnapshot v2
                      └─ Windows memory source ───┘             │
                                                                 ├─→ JSON / JSONL
                                                                 ├─→ feature extraction
@@ -48,7 +48,7 @@ Mechabellum data ────┤                            ├─→ MatchSnaps
                                                                 └─→ inference
 ```
 
-`MatchSnapshot v1` is the only output type of the collection layer and the only position input type for downstream modules. The typed models enforce runtime field constraints; the JSON Schema handles persistence and cross-process data validation.
+`MatchSnapshot v2` is the only output type of the collection layer and the only position input type for downstream modules. The typed models enforce runtime field constraints; the JSON Schema handles persistence and cross-process data validation.
 
 ## Module responsibilities
 
