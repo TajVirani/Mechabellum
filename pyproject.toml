@@ -41,6 +41,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "mechabellum.collector" = ["game_names.json"]
+"mechabellum.visualizer" = ["unit_roles.json", "static/**/*"]
 
 [tool.setuptools.data-files]
 "share/mechabellum/contracts/match-snapshot/v1" = [
@@ -54,6 +55,7 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["e2e: end-to-end browser tests of the Visualizer (need Playwright and Chrome)"]
 filterwarnings = [
   "ignore:Setting the shape on a NumPy array has been deprecated:DeprecationWarning:joblib.numpy_pickle",
 ]

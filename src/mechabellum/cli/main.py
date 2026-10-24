@@ -91,14 +91,19 @@ def _parser() -> argparse.ArgumentParser:
     live_predict.add_argument("--model", type=Path, default=Path("artifacts/win_model.joblib"))
 
     fetch = _command(
-        commands, "fetch-replays", "Download tournament replays through the MechaBridge mod, newest first.", _fetch_replays
+        commands,
+        "fetch-replays",
+        "Download tournament replays through the MechaBridge mod, newest first.",
+        _fetch_replays,
     )
     fetch.add_argument(
         "--versions",
         nargs="+",
         help="Game version and replay format, such as 2.0.0.5.2340; defaults to the running game's version.",
     )
-    fetch.add_argument("--stop-after", type=int, default=10, help="Stop after this many already downloaded replays in a row.")
+    fetch.add_argument(
+        "--stop-after", type=int, default=10, help="Stop after this many already downloaded replays in a row."
+    )
     fetch.add_argument(
         "--full",
         action="store_true",
@@ -193,6 +198,25 @@ def _parser() -> argparse.ArgumentParser:
     predict = _command(commands, "predict", "Compute final win probabilities for one MatchSnapshot.", _predict)
     predict.add_argument("--input", type=Path, help="JSON file; reads standard input when omitted.")
     predict.add_argument("--model", type=Path, default=Path("artifacts/win_model.joblib"))
+
+    visualize = _command(
+        commands, "visualize", "Serve the Visualizer: Stats and Current Match views in the browser.", _visualize
+    )
+    visualize.add_argument("--port", type=int, default=8765, help="Port on 127.0.0.1; 0 picks a free one.")
+    visualize.add_argument("--no-browser", action="store_true", help="Don't open the browser.")
+    visualize.add_argument(
+        "--replay-dir", type=Path, help="Replay folder, scanned recursively; defaults to the game's."
+    )
+    visualize.add_argument(
+        "--data-dir", type=Path, help="Cache and config folder; defaults to %%LOCALAPPDATA%%/mechabellum-analytics."
+    )
+    visualize.add_argument("--player-id", help="Set and remember the Local Player id.")
+    visualize.add_argument("--playback", type=Path, help="Replay a live-record JSONL file instead of reading memory.")
+    visualize.add_argument(
+        "--playback-speed", type=float, default=1.0, help="Playback speed multiplier; 0 plays as fast as possible."
+    )
+    visualize.add_argument("--model", type=Path, default=Path("artifacts/win_model.joblib"))
+    visualize.add_argument("--no-live", action="store_true", help="No live source: Stats view only.")
 
     timeline = _command(commands, "timeline", "Output round-by-round win probabilities for one match.", _timeline)
     timeline.add_argument("dataset", type=Path)
@@ -365,6 +389,31 @@ def _live_predict(args: argparse.Namespace) -> None:
             except ObserverStateError as error:
                 print(str(error), file=sys.stderr)
             time.sleep(interval)
+
+
+def _visualize(args: argparse.Namespace) -> None:
+    from ..visualizer import VisualizerOptions, run
+
+    if args.playback_speed < 0:
+        raise ValueError("--playback-speed must be 0 or more.")
+    if args.playback is not None and not args.playback.is_file():
+        raise FileNotFoundError(f"Playback file not found: {args.playback}")
+    replay_dir = args.replay_dir or locate_game().replay_directory
+    if replay_dir is None:
+        print("Replay directory not found; the Stats view will be empty.", file=sys.stderr)
+    run(
+        VisualizerOptions(
+            port=args.port,
+            open_browser=not args.no_browser,
+            replay_dir=replay_dir,
+            data_dir=args.data_dir,
+            player_id=args.player_id,
+            playback=args.playback,
+            playback_speed=args.playback_speed,
+            model=args.model,
+            live=not args.no_live,
+        )
+    )
 
 
 def _fetch_replays(args: argparse.Namespace) -> int:

@@ -1,0 +1,42 @@
+version: "3"
+
+vars:
+  PYTHON: '{{if eq OS "windows"}}.venv/Scripts/python.exe{{else}}.venv/bin/python{{end}}'
+  VENDOR_DIR: src/mechabellum/visualizer/static/vendor
+  LEGEND_STATE_VERSION: 3.0.0-beta.48
+  ECHARTS_VERSION: 6.1.0
+
+tasks:
+  visualize:
+    desc: Serve the Visualizer on http://127.0.0.1:8765/ (extra flags after --)
+    cmds:
+      - "{{.PYTHON}} -m mechabellum.cli visualize {{.CLI_ARGS}}"
+
+  visualize:playback:
+    desc: Serve the Visualizer with a live-record JSONL file as the live source (FILE=..., SPEED=1.0)
+    requires:
+      vars: [FILE]
+    cmds:
+      - '{{.PYTHON}} -m mechabellum.cli visualize --playback "{{.FILE}}" --playback-speed {{.SPEED | default "1.0"}} {{.CLI_ARGS}}'
+
+  vendor:
+    desc: Re-download the pinned frontend libraries into the Visualizer's static/vendor (ADR 0001)
+    cmds:
+      - >-
+        {{.PYTHON}} -c "import pathlib, sys, urllib.request;
+        out = pathlib.Path(sys.argv[1]); out.mkdir(parents=True, exist_ok=True);
+        [print('Downloaded', name, (out / name).write_bytes(urllib.request.urlopen(url, timeout=60).read()), 'bytes')
+        for name, url in zip(sys.argv[2::2], sys.argv[3::2])]"
+        "{{.VENDOR_DIR}}"
+        legend-state.mjs "https://cdn.jsdelivr.net/npm/@legendapp/state@{{.LEGEND_STATE_VERSION}}/index.mjs"
+        echarts.esm.min.js "https://cdn.jsdelivr.net/npm/echarts@{{.ECHARTS_VERSION}}/dist/echarts.esm.min.js"
+
+  test:
+    desc: Run the test suite without the browser end-to-end tests
+    cmds:
+      - '{{.PYTHON}} -m pytest -q -m "not e2e" {{.CLI_ARGS}}'
+
+  test:e2e:
+    desc: Run the Visualizer end-to-end tests (Playwright on the installed Chrome)
+    cmds:
+      - "{{.PYTHON}} -m pytest -q -m e2e tests/e2e {{.CLI_ARGS}}"

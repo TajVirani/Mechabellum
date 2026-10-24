@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mechabellum Visualizer</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="style.css" />
+    <script>
+      // Legend-State reads process.env.NODE_ENV; set it before the first import.
+      globalThis.process = { env: { NODE_ENV: "production" } };
+    </script>
+    <script type="module">
+      import { start } from "./app.js";
+      start();
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+  </body>
+</html>
