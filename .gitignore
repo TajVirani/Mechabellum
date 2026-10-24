@@ -16,3 +16,7 @@ artifacts/
 .claude/
 CLAUDE.md
 CLAUDE.local.md
+
+# Mod build output
+mods/**/bin/
+mods/**/obj/

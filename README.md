@@ -120,6 +120,15 @@ While spectating, output both players' final win probabilities when each round's
 .venv\Scripts\mecha live-predict --model artifacts\win_model.joblib
 ```
 
+Download past tournament replays, newest first, through the [MechaBridge mod](mods/MechaBridge/README.md) (needs MelonLoader and `pip install -e ".[bridge]"`). It defaults to the running game's version and stops after 10 replays in a row that are already on disk, or at the first replay older than every requested version:
+
+```powershell
+.venv\Scripts\mecha fetch-replays
+.venv\Scripts\mecha fetch-replays --versions 2.0.0.5.2340 2.0.0.4.2331
+```
+
+`--full` ignores the 10-in-a-row rule and walks to the oldest requested version, skipping replays already on disk; use it to resume a backfill that was interrupted.
+
 All commands and options are listed by `.venv\Scripts\mecha --help` and each subcommand's `--help`.
 
 ## Project structure
@@ -128,8 +137,11 @@ All commands and options are listed by `.venv\Scripts\mecha --help` and each sub
 Mechabellum/
 ├─ pyproject.toml
 ├─ contracts/match-snapshot/v2/     # JSON Schema and example (v1 kept as a record)
+├─ contracts/bridge/v1/             # Protobuf protocol between the mod, the CLI and the website
+├─ mods/MechaBridge/                 # MelonLoader mod that serves the bridge protocol in game
 ├─ src/mechabellum/
-│  ├─ collector/                     # Replay and live memory data sources
+│  ├─ bridge/                        # Bridge protocol client
+│  ├─ collector/                     # Replay, live memory and tournament data sources
 │  ├─ contracts/                     # Strongly typed MatchSnapshot
 │  ├─ datasets/                      # JSONL reading/writing and replay export
 │  ├─ features/                      # Player-symmetric baseline features
