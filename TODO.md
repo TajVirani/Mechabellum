@@ -50,8 +50,23 @@
 
 - [x] Implement ranking of candidate purchase, upgrade, technology, and deployment actions on top of the win probability model (`mecha recommend`; static model judgement, no simulated fight)
 - [x] Investigate whether `ReplaySimulateMatch` / `ReplayAIMatch` can customize positions, run headless at accelerated speed, and run in batches (read-only findings and design in docs/self-play.md; confirming needs MelonLoader)
-- [ ] If an internal simulation entry point is available, wrap it as an AI-vs-AI self-play environment
-- [ ] Implement a reproducible batch AI-vs-AI match and `.grbr` replay generator that records random seeds, both strategy versions, game build, and complete results
 - [x] Build version indexing, deduplication, abnormal match filtering, and distribution statistics for generated data, and evaluate generalization on a test set of real player replays only (`mecha dataset-stats`, `mecha evaluate`)
+- [ ] The remaining self-play work moved to the simulator feature in the backlog
+
+## Backlog
+
+### Simulator (future feature)
+
+A fight simulator for AI-vs-AI self-play and for scoring `mecha recommend` candidates with simulated fights instead of the static model alone. Self-play must stay local: mods that send data to the server are not allowed.
+
+Options to evaluate first:
+
+- An offline MelonLoader mod driving the game's own `ReplaySimulateMatch` / `ReplayAIMatch` (design in docs/self-play.md; needs MelonLoader and a .NET SDK)
+- [qbisi/mechcore](https://github.com/qbisi/mechcore), an open reimplementation whose configs are generated from game 2.0.0.4 (also the source of `collector/game_names.json`); check its fight fidelity and license
+
+Tasks:
+
+- [ ] Choose the simulation backend and wrap it as an AI-vs-AI self-play environment
+- [ ] Implement a reproducible batch AI-vs-AI match and `.grbr` replay generator that records random seeds, both strategy versions, game build, and complete results
 - [ ] Investigate sampling ratios, sample weights, and curriculum learning strategies for real replays vs. self-play data
 - [ ] Continuously calibrate the simulation environment against real replays so results do not only hold in an approximate simulator
