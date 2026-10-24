@@ -95,6 +95,19 @@ def _parser() -> argparse.ArgumentParser:
         "--calibration-size", type=float, default=0.2, help="Share of training matches used for calibration."
     )
 
+    deep = _command(
+        commands,
+        "train-deep",
+        "Train a token model (Deep Sets, Transformer or GNN) over unit formations; needs the deep extra.",
+        _train_deep,
+    )
+    deep.add_argument("--dataset", type=Path, required=True)
+    deep.add_argument("--architecture", choices=("deepsets", "transformer", "gnn"), default="transformer")
+    deep.add_argument("--output", type=Path, help="Defaults to artifacts/win_model_<architecture>.pt.")
+    deep.add_argument("--split", choices=("group", "time"), default="group")
+    deep.add_argument("--epochs", type=int, default=300)
+    deep.add_argument("--seed", type=int, default=20260711)
+
     evaluate = _command(
         commands,
         "evaluate",
@@ -282,6 +295,16 @@ def _train(args: argparse.Namespace) -> None:
         split=args.split,
         calibration=args.calibration,
         calibration_size=args.calibration_size,
+    )
+    print(json.dumps(metadata, ensure_ascii=False, indent=2))
+
+
+def _train_deep(args: argparse.Namespace) -> None:
+    from ..training.deep import train_token_model
+
+    output = args.output or Path(f"artifacts/win_model_{args.architecture}.pt")
+    metadata = train_token_model(
+        args.dataset, output, architecture=args.architecture, split=args.split, epochs=args.epochs, seed=args.seed
     )
     print(json.dumps(metadata, ensure_ascii=False, indent=2))
 

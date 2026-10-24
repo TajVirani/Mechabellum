@@ -90,6 +90,12 @@ Train a model and view round-by-round win probabilities for a match:
 .venv\Scripts\mecha evaluate data\held-out.jsonl --model artifacts\win_model.joblib
 ```
 
+With the `deep` extra (`pip install -e ".[ml,deep]"`), train a token model over individual formations instead: Deep Sets, a Transformer that attends across both armies, or a GNN over the board's nearest-neighbour graph. `predict`, `evaluate`, `timeline` and `live-predict` accept the resulting `.pt` file wherever they take a model:
+
+```powershell
+.venv\Scripts\mecha train-deep --dataset data\match-snapshots.v2.jsonl --architecture transformer
+```
+
 While spectating, output both players' final win probabilities when each round's fight ends:
 
 ```powershell

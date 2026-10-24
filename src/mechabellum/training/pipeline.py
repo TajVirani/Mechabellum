@@ -51,10 +51,10 @@ def train_model(
         raise ValueError(f"Only {len(battle_ids)} usable 1v1 matches; at least 10 are required for a validation split.")
 
     rows = EvaluationRows.from_snapshots(snapshots)
-    fit_indices, test_indices = _split(rows.battle_ids, test_size, split, seed)
+    fit_indices, test_indices = split_matches(rows.battle_ids, test_size, split, seed)
     calibration_indices = np.asarray([], dtype=int)
     if calibration != "none":
-        fit_part, calibration_part = _split(rows.battle_ids[fit_indices], calibration_size, split, seed)
+        fit_part, calibration_part = split_matches(rows.battle_ids[fit_indices], calibration_size, split, seed)
         fit_indices, calibration_indices = fit_indices[fit_part], fit_indices[calibration_part]
     fit = rows.subset(fit_indices)
     test = rows.subset(test_indices)
@@ -116,7 +116,7 @@ def battle_order_key(battle_id: str) -> tuple[int, ...]:
     return tuple(int(part) for part in parts) or (0,)
 
 
-def _split(battle_ids: np.ndarray, size: float, mode: SplitMode, seed: int) -> tuple[np.ndarray, np.ndarray]:
+def split_matches(battle_ids: np.ndarray, size: float, mode: SplitMode, seed: int) -> tuple[np.ndarray, np.ndarray]:
     """Indices of the kept rows and the held-out rows; whole matches always stay on one side."""
     if mode == "group":
         splitter = GroupShuffleSplit(n_splits=1, test_size=size, random_state=seed)

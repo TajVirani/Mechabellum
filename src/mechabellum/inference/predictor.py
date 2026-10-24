@@ -4,8 +4,9 @@ from pathlib import Path
 from typing import Any
 
 from ..contracts import MODEL_SNAPSHOT_PHASE, MatchSnapshot
-from ..features import build_features, feature_names
+from ..features import feature_names
 from ..models import load_artifact as _load_artifact
+from ..models import win_probabilities
 
 
 def load_artifact(model_path: Path) -> dict[str, Any]:
@@ -16,8 +17,7 @@ def predict_snapshot(artifact: dict[str, Any], snapshot: MatchSnapshot, model_pa
     if len(snapshot.players) != 2:
         raise ValueError("The win predictor only supports 1v1 positions.")
 
-    model = artifact["model"]
-    raw = [float(model.predict_proba(build_features(snapshot, index).reshape(1, -1))[0, 1]) for index in (0, 1)]
+    raw = [float(value) for value in win_probabilities(artifact, [snapshot, snapshot], [0, 1])]
     total = sum(raw)
     probabilities = [0.5, 0.5] if total <= 0 else [value / total for value in raw]
     result: dict[str, Any] = {

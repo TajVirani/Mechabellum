@@ -22,6 +22,7 @@ class EvaluationRows:
     y: np.ndarray
     battle_ids: np.ndarray
     snapshots: list[MatchSnapshot]
+    perspectives: np.ndarray
 
     @classmethod
     def from_snapshots(cls, snapshots: Sequence[MatchSnapshot]) -> EvaluationRows:
@@ -29,6 +30,7 @@ class EvaluationRows:
         labels: list[int] = []
         battle_ids: list[str] = []
         expanded: list[MatchSnapshot] = []
+        perspectives: list[int] = []
         for snapshot in snapshots:
             if snapshot.outcome is None or snapshot.match.battle_id is None:
                 raise ValueError("Snapshot is missing outcome or match.battleId.")
@@ -37,11 +39,22 @@ class EvaluationRows:
                 labels.append(int(perspective == snapshot.outcome.winner_index))
                 battle_ids.append(snapshot.match.battle_id)
                 expanded.append(snapshot)
-        return cls(np.vstack(rows), np.asarray(labels, dtype=np.int8), np.asarray(battle_ids), expanded)
+                perspectives.append(perspective)
+        return cls(
+            np.vstack(rows),
+            np.asarray(labels, dtype=np.int8),
+            np.asarray(battle_ids),
+            expanded,
+            np.asarray(perspectives, dtype=np.int64),
+        )
 
     def subset(self, indices: np.ndarray) -> EvaluationRows:
         return EvaluationRows(
-            self.x[indices], self.y[indices], self.battle_ids[indices], [self.snapshots[i] for i in indices]
+            self.x[indices],
+            self.y[indices],
+            self.battle_ids[indices],
+            [self.snapshots[i] for i in indices],
+            self.perspectives[indices],
         )
 
 
@@ -123,14 +136,14 @@ def evaluate_model(dataset_path: Path, model_path: Path) -> dict[str, object]:
     """Evaluate a saved model on every usable snapshot of a dataset, which should not overlap its training data."""
     from ..datasets import load_training_snapshots
     from ..features import feature_names
-    from ..models import load_artifact
+    from ..models import load_artifact, win_probabilities
 
     snapshots = load_training_snapshots(dataset_path)
     if not snapshots:
         raise ValueError("The dataset contains no usable snapshots.")
     artifact = load_artifact(model_path, feature_names())
     rows = EvaluationRows.from_snapshots(snapshots)
-    report = evaluation_report(rows, artifact["model"].predict_proba(rows.x)[:, 1])
+    report = evaluation_report(rows, win_probabilities(artifact, rows.snapshots, rows.perspectives.tolist()))
     return {"datasetPath": str(dataset_path.resolve()), "model": str(model_path.resolve()), **report}
 
 

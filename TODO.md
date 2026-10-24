@@ -25,17 +25,17 @@
 
 ## P1B: Complete position description
 
-- [ ] Represent each formation as an independent token: unit ID, level, experience, value, specific technologies, specific equipment, exact X/Y, orientation, and side
+- [x] Represent each formation as an independent token: unit ID, level, experience, value, specific technologies, specific equipment, exact X/Y, orientation, and side
 - [x] Normalize both players' coordinate directions, express front-to-back depth relative to the battlefield midline, and preserve left/right lane position (`features/geometry.py`)
 - [x] Express relative positions between units: front/back line, neighbor distance, protection relationships, density, left/right lane coverage, and expected engagement order
-- [ ] Express matchups and counter interactions between opposing units, not just independent per-unit counts
+- [x] Express matchups and counter interactions between opposing units, not just independent per-unit counts (lane matchup features; cross-army attention and GNN edges)
 - [x] Add both players' core, max core, remaining supply, current round income, cumulative investment, unlock state, and unspent economy
-- [ ] Add specific technologies, equipment, specialists, opening lineup, dealt card candidates, final card choice, and commander abilities/cooldowns
+- [x] Add specific technologies, equipment, specialists, opening lineup, dealt card candidates, final card choice, and commander abilities/cooldowns
 - [x] Add towers, energy towers, blueprints, devices, buildings, and enhancement state
 - [x] Add previous round battle score, surviving formations, core damage, win/loss history, and economy/core change sequences
-- [ ] Add map, game mode, game version, balance patch, and available unit pool
+- [x] Add map, game mode, game version, balance patch, and available unit pool (token model context; they cancel in the difference features)
 - [x] Preserve raw values and explicit masks for missing, unknown, and version-new IDs; never silently treat them as 0
-- [ ] First implement a fixed grid/zone coordinate baseline, then Deep Sets / Transformer / graph neural network (GNN) models over formation tokens
+- [x] First implement a fixed grid/zone coordinate baseline, then Deep Sets / Transformer / graph neural network (GNN) models over formation tokens (`mecha train-deep`; they need far more matches to beat the linear model)
 - [x] Version the base position schema and keep replay training data and live spectator snapshot fields consistent
 
 ## P1C: Round value targets
