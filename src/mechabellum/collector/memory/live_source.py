@@ -226,9 +226,9 @@ class LiveMemorySource:
             officer_ids=None if modules is None else self._read_officer_ids(controller, modules),
             buildings=None if modules is None else self._read_buildings(controller, modules),
             contraptions=None if modules is None else self._read_contraptions(controller, modules),
-            # Memory holds every blueprint and energy tower skill with an active flag, but neither the full lists
-            # nor the active subsets match what replays record, so these stay unknown.
-            blueprint_ids=None,
+            blueprint_ids=None if modules is None else self._read_blueprint_ids(controller, modules),
+            # Memory flags each energy tower skill used this round; replays list only some of those, by a rule
+            # not yet known, so this stays unknown.
             energy_tower_skill_ids=None,
             tower_strengthen_levels=None
             if modules is None
@@ -271,6 +271,20 @@ class LiveMemorySource:
         officers = self._module_items(controller, modules.officer_manager, modules.officer_invisible_items)
         officers += self._module_items(controller, modules.officer_manager)
         return [officer_id for officer in officers if (officer_id := self._item_id(officer)) > 0]
+
+    def _read_blueprint_ids(self, controller: int, modules: PlayerModuleOffsets) -> list[int]:
+        # One slot per blueprint line. A one-off blueprint is flagged active once researched; an enhancement's slot
+        # moves to its next tier instead (Defense Enhancement 5 becomes 501). Replays list the researched ids, in
+        # ascending order, so a slot past its first tier counts as its base blueprint (501 // 100 = 5). A flagged
+        # final tier (an Attack Enhancement II bought, which replays list as 401) has not been seen live yet.
+        researched = []
+        for slot in self._module_items(controller, modules.blueprint_manager):
+            blueprint_id = self._item_id(slot)
+            if self._memory.read_byte(slot + ACTIVABLE_ITEM_IS_ACTIVE) != 0:
+                researched.append(blueprint_id)
+            elif blueprint_id >= 100:
+                researched.append(blueprint_id // 100)
+        return sorted(researched)
 
     def _read_tower_strengthen_levels(self, controller: int, modules: PlayerModuleOffsets) -> list[int]:
         # A tower's strengthen data id is its level; towers that were never strengthened have none.

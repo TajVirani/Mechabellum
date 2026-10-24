@@ -20,7 +20,8 @@
 - [x] Output specialists, commander abilities, shop unlocks, and building state
 - [x] Output the opening lineup choice (`openingLineup`, from the round 0 `PAD_ChooseAdvanceTeam`)
 - [x] Read the current round's candidate and chosen cards from the live `ReinforcementManager`
-- [ ] Map live blueprint and energy tower skill ids to the values replays record
+- [x] Map live blueprint ids to the values replays record (verified against a 2.0.0.5 match)
+- [ ] Map live energy tower skill ids to the values replays record (memory flags each skill used this round; replays list a subset by an unknown rule)
 - [x] Build ID-to-name/cost tables for cards, technologies, equipment, and specialists (`collector/game_names.json`, from qbisi/mechcore for 2.0.0.4 with mech-data 1.8.0.3 as fallback; every id in our Normal 1v1 replays is named, AsyncBattle ids are not)
 
 ## P1B: Complete position description

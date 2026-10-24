@@ -40,5 +40,6 @@ Models train on `fight_over` snapshots, and the live predictor runs on the first
 - `rating` is the player's 1v1 Elo from live memory (`PlayerBaseInfo.eloScore`), checked against the in-game ratings on 2.0.0.5. Replays do not record ratings, so replay snapshots leave it `null`.
 - `maxReactorCore` and `roundSupplyIncome` are current values read from live memory. Replays only store starting values and income settings, so replay snapshots leave them `null`.
 - `officerIds` lists hidden officers first, then visible ones, in both sources. `towerStrengthenLevels` has one entry per tower, 0 when never strengthened.
-- `blueprintIds` and `energyTowerSkillIds` are `null` in live snapshots: memory holds every blueprint and energy tower skill with an active flag, and neither the full lists nor the active subsets match what replays record.
+- `blueprintIds` lists the researched blueprints in ascending order, by base id (an Attack Enhancement researched once is `4`), in both replays and live snapshots.
+- `energyTowerSkillIds` is `null` in live snapshots: memory flags each energy tower skill used this round, which is not what replays record.
 - `formationIndex` is the game's unit index in replays and the list position in live snapshots, so the two can differ once units have been sold. Unit equipment durability is `null` in replays and read from memory live.

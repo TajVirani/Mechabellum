@@ -242,6 +242,10 @@ def _build_player_modules(
     memory.int32(skill + modules.commander_skill_get_round, 1)
     memory.write(skill + modules.commander_skill_is_active, b"\x01")
     manager(modules.commander_skill_manager, [skill])
+    # Field Recovery (2) researched, Attack and Defense Enhancement moved to their second tier, the rest unresearched.
+    blueprints = [_item(memory, blueprint_id) for blueprint_id in (1, 2, 3, 401, 501)]
+    memory.write(blueprints[1] + 0x18, b"\x01")
+    manager(modules.blueprint_manager, blueprints)
     officers = manager(modules.officer_manager, [_item(memory, 20035)])
     memory.pointer(officers + modules.officer_invisible_items, memory.list([_item(memory, 20301)]))
     strengthened, plain = memory.allocate(), memory.allocate()
@@ -329,7 +333,11 @@ def test_live_snapshot_reads_each_layout(layout: MemoryLayout) -> None:
             (s.skill_id, s.slot_index, s.acquired_round, s.cooldown_rounds, s.is_active)
             for s in alpha.commander_skills or []
         ] == [(900001, 0, 1, 2, True)]
-        assert (alpha.officer_ids, alpha.blueprint_ids, alpha.energy_tower_skill_ids) == ([20301, 20035], None, None)
+        assert (alpha.officer_ids, alpha.blueprint_ids, alpha.energy_tower_skill_ids) == (
+            [20301, 20035],
+            [2, 4, 5],
+            None,
+        )
         assert [(b.building_id, b.x, b.y, b.durability) for b in alpha.buildings or []] == [(1, 140.0, 55.0, [-1, -1])]
         assert [(c.contraption_id, c.index, c.x, c.y) for c in alpha.contraptions or []] == [(10001, 3, -114.0, -122.0)]
         assert alpha.unlocked_unit_ids == [24]

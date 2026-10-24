@@ -92,7 +92,9 @@ The v2 player fields come from `PlayerController` managers. Each manager keeps i
 | `towerStrengthenLevels` | `buildingManager (+0x1C8) → buildings (+0x30)`, each tower's `towerStrengthenData (+0x30)` id, 0 when null |
 | `unlockedUnitIds` | `shopManager (+0x1D0) → shop (+0x40) → unlockedUnits (+0x28)`, `CardElement → unitData → id` |
 
-`blueprintIds` and `energyTowerSkillIds` are left `null` live. `blueprintManager (+0x178)` and `energyTowerManager (+0x1C0)` list every blueprint and energy tower skill with an active flag, but neither the full lists nor the active subsets match what replays record.
+`blueprintIds` comes from `blueprintManager (+0x178)`, whose items are one slot per blueprint line with an `IsActive` byte at `+0x18`. A one-off blueprint (Sticky Oil Bomb 1, Field Recovery 2, Mobile Beacon 3) is flagged active once researched. An enhancement's slot moves to its next tier instead: researching Defense Enhancement turns slot 5 into 501. Replays list the researched ids in ascending order, so a slot past its first tier counts as its base id (`501 // 100 = 5`). This matched the replay in every round of a spectated 2.0.0.5 match (2026-10-24). A flagged final tier (Attack Enhancement II bought, which replays list as 401) has not been seen live.
+
+`energyTowerSkillIds` is left `null` live. `energyTowerManager (+0x1C0)` lists all five skills and flags each one used during the current round (the flags clear when the next round starts). Replays list only some of those skills, by a rule not yet known: in that match, one Rapid Resupply out of more than ten skill uses.
 
 ## Build updates
 

@@ -68,6 +68,7 @@ class PlayerModuleOffsets:
     reinforcement_round_items: int
     reinforcement_chosen_items: int
     officer_manager: int
+    blueprint_manager: int
     commander_skill_manager: int
     contraption_manager: int
     construction_manager: int
@@ -201,6 +202,7 @@ LAYOUT_2_0_0_5 = MemoryLayout(
         reinforcement_round_items=0x50,
         reinforcement_chosen_items=0x58,
         officer_manager=0x190,
+        blueprint_manager=0x178,
         commander_skill_manager=0x198,
         contraption_manager=0x1A8,
         construction_manager=0x1B0,
