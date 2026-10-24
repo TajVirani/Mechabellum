@@ -5,10 +5,13 @@ A research project for Mechabellum spectator analytics. It combines `.grbr` repl
 The project uses `MatchSnapshot v2` as its formal data boundary:
 
 ```text
-.grbr replay ─────┐
-                  ├─ collector ─→ MatchSnapshot v2 ─→ datasets ─→ training ─→ model
-live process ─────┘                        └──────────────────────→ inference
+MechaBridge mod ─→ tournament .grbr ─┐
+.grbr replay ─────────────────────────┤
+                                      ├─ collector ─→ MatchSnapshot v2 ─→ datasets ─→ training ─→ model
+live process (read-only memory) ──────┘                        └──────────────────────→ inference
 ```
+
+[Data sources](docs/data-sources.md) describes what each channel provides, how it detects the game version, and the plan for streaming live data.
 
 Runtime modules pass strongly typed Python objects directly; data is saved and exchanged as versioned JSON or JSONL validated against a JSON Schema.
 
@@ -26,7 +29,8 @@ See the **[replay collection repository](https://github.com/FogMoe/Mechabellum-R
 - Parse `.grbr` replays and output a `fight_over` snapshot for each round
 - Read both players' deployments while spectating via Windows `ReadProcessMemory`
 - Record players, rounds, economy, units, levels, experience, coordinates, equipment (up to two items per unit), technologies, fight history, card offers and choices, commander skills, officers, buildings, contraptions, and unlocked units
-- Export a replay directory as a `MatchSnapshot v2` JSONL dataset
+- Download past tournament replays through the optional MechaBridge mod
+- Export a replay directory, including downloaded replays, as a `MatchSnapshot v2` JSONL dataset
 - Split training and test sets by whole match and train a player-symmetric win probability baseline
 - Compute final win probabilities for a single position, a full match timeline, or live at the end of each round's fight
 
@@ -40,11 +44,11 @@ python -m venv .venv
 .venv\Scripts\python -m pip install -e .
 ```
 
-The base install provides replay and live collection. Install the `ml` extra for training and inference, and the `dev` extra as well for a development environment:
+The base install provides replay and live collection. Install the `ml` extra for training and inference, the `bridge` extra for `fetch-replays`, and the `dev` extra as well for a development environment:
 
 ```powershell
 .venv\Scripts\python -m pip install -e ".[ml]"
-.venv\Scripts\python -m pip install -e ".[ml,dev]"
+.venv\Scripts\python -m pip install -e ".[ml,bridge,dev]"
 ```
 
 ## Usage
@@ -127,7 +131,7 @@ Download past tournament replays, newest first, through the [MechaBridge mod](mo
 .venv\Scripts\mecha fetch-replays --versions 2.0.0.5.2340 2.0.0.4.2331
 ```
 
-`--full` ignores the 10-in-a-row rule and walks to the oldest requested version, skipping replays already on disk; use it to resume a backfill that was interrupted.
+`--full` ignores the 10-in-a-row rule and walks to the oldest requested version, skipping replays already on disk; use it to resume a backfill that was interrupted. A version is the game version followed by the replay format, as the game names its download folders. Downloads land in `Replay\<version>\` under the replay directory, where `export-dataset` and `dataset-stats` find them; tournament replays record no winner, so `export-dataset` counts them but cannot train on them yet.
 
 All commands and options are listed by `.venv\Scripts\mecha --help` and each subcommand's `--help`.
 
@@ -155,7 +159,7 @@ Mechabellum/
 └─ artifacts/                        # Local models, not committed
 ```
 
-See [Architecture](docs/architecture.md) for module boundaries and dependency direction, [Memory layout](docs/memory-layout.md) for live build versions and offsets, and [TODO](TODO.md) for upcoming features.
+See [Architecture](docs/architecture.md) for module boundaries and dependency direction, [Data sources](docs/data-sources.md) for what replays, live memory and the mod each provide, [Memory layout](docs/memory-layout.md) for live build versions and offsets, and [TODO](TODO.md) for upcoming features.
 
 ## Data contract
 

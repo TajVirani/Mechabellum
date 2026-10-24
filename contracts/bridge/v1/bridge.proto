@@ -30,7 +30,8 @@ message Envelope {
     DownloadReplayRequest download_replay_request = 30;
     DownloadReplayReply download_replay_reply = 31;
   }
-  // Field numbers 100 and up are reserved for live game events.
+  // Field numbers 100 and up are reserved for live game events. They will carry MatchSnapshot v2
+  // (contracts/match-snapshot/v2), not a schema of their own; see docs/data-sources.md.
 }
 
 message Error {
@@ -44,7 +45,8 @@ message StatusRequest {}
 message StatusReply {
   uint32 protocol_version = 1;
   string mod_version = 2;
-  // Application.version, e.g. "2.0.0.5.2340". Same shape as the prefix of a replay path.
+  // Application.version, e.g. "2.0.0.5.2340": the game version, then the replay format. Same shape as
+  // the prefix of a replay path and the name of the folder downloaded replays are saved in.
   string game_version = 3;
   bool online = 4;
   // FileUtility.ReplayDirectoryFullPath, where the game saves replays.

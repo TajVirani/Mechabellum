@@ -9,6 +9,7 @@
 - [x] Train a player-symmetric probability baseline and support `live-predict` inference
 - [x] Time-split training (`--split time`) and probability calibration (`--calibration sigmoid|isotonic`)
 - [ ] Accumulate at least 5,000 same-version 1v1 matches so time-split calibration has enough data
+- [ ] Derive winners for tournament (`Competition`) replays from `mecha fetch-replays`: their final `teamRanks` are empty, so `export-dataset` cannot label them yet
 - [x] Add evaluation reports broken down by round, map, rank tier, and version (`mecha evaluate`; replays carry no rating, so rank tiers need live recordings)
 - [x] Read live player phase and predict once per round when both players reach `FightOver`
 - [x] Add a stable JSONL recorder for live snapshots, with timestamps (`mecha live-record`)
@@ -23,6 +24,7 @@
 - [x] Map live blueprint ids to the values replays record (verified against a 2.0.0.5 match)
 - [ ] Map live energy tower skill ids to the values replays record (memory flags each skill used this round; replays list a subset by an unknown rule)
 - [x] Build ID-to-name/cost tables for cards, technologies, equipment, and specialists (`collector/game_names.json`, from qbisi/mechcore for 2.0.0.4 with mech-data 1.8.0.3 as fallback; every id in our Normal 1v1 replays is named, AsyncBattle ids are not)
+- [ ] Stream live snapshots to the website over the MechaBridge connection, as MatchSnapshot v2 in Envelope fields 100 and up (direction in docs/data-sources.md; needs a mod rebuild)
 
 ## P1B: Complete position description
 

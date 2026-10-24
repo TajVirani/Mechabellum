@@ -2,7 +2,7 @@
 
 `bridge/v1/bridge.proto` is the protocol the [MechaBridge mod](../mods/MechaBridge/README.md) serves over a local WebSocket, one `Envelope` per binary frame, for the `mecha` CLI and the website. `src/mechabellum/bridge/bridge_pb2.py` is generated from it with `python -m grpc_tools.protoc -I contracts/bridge/v1 --python_out=src/mechabellum/bridge --pyi_out=src/mechabellum/bridge contracts/bridge/v1/bridge.proto` (protoc cannot read `\\wsl.localhost` paths, so run it from a Linux shell or a local copy). The mod compiles the proto at build time.
 
-The rest of this document covers MatchSnapshot.
+The bridge carries no snapshots of its own yet; live game events it streams later will carry MatchSnapshot v2, not a second schema (see [Data sources](../docs/data-sources.md#live-data)). The rest of this document covers MatchSnapshot.
 
 `match-snapshot/v2/schema.json` defines `MatchSnapshot v2`, shared by collection, persistence, training, and inference. `fight-over.example.json` is a complete example that passes validation against this schema. `match-snapshot/v1/` is kept as a historical record only; the package reads and writes v2 exclusively, and v1 datasets should be regenerated from replays with `mecha export-dataset`.
 
