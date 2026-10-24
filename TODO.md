@@ -43,7 +43,7 @@
 - [x] Construct normalized round advantage labels from `FightReport.Score`, both players' core changes, and surviving formation value (`training/targets.py`)
 - [x] Use final win/loss as the primary target and per-round net core damage / net HP won as auxiliary regression or ranking targets to train a multi-task position value model (`train-deep --advantage-weight`)
 - [x] Define "final win/loss primary reward + discounted round advantage auxiliary reward" for action recommendation; normalize and clip round rewards so large local wins do not mask a final loss (`RewardConfig`)
-- [ ] Use ablation experiments to compare the effect of final win/loss only, adding round advantage, and different reward weights on probability calibration and action ranking
+- [x] Use ablation experiments to compare the effect of final win/loss only, adding round advantage, and different reward weights on probability calibration and action ranking (`mecha ablate`; results in docs/experiments.md, no measurable gain yet)
 
 ## P2: Action recommendation and self-play
 
