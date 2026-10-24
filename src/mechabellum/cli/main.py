@@ -94,7 +94,9 @@ def _parser() -> argparse.ArgumentParser:
         commands, "fetch-replays", "Download tournament replays through the MechaBridge mod, newest first.", _fetch_replays
     )
     fetch.add_argument(
-        "--versions", nargs="+", help="Game versions such as 2.0.0.5.2340; defaults to the running game's version."
+        "--versions",
+        nargs="+",
+        help="Game version and replay format, such as 2.0.0.5.2340; defaults to the running game's version.",
     )
     fetch.add_argument("--stop-after", type=int, default=10, help="Stop after this many already downloaded replays in a row.")
     fetch.add_argument(
@@ -249,7 +251,8 @@ def _export_dataset(args: argparse.Namespace) -> None:
         print(f"Skipped: {failure}", file=sys.stderr)
     print(
         f"Export complete: replays {summary.replay_file_count}, 1v1 {summary.match_count}, "
-        f"snapshots {summary.snapshot_count}, failures {summary.failure_count}, output {args.output.resolve()}",
+        f"1v1 without a winner {summary.no_winner_count}, snapshots {summary.snapshot_count}, "
+        f"failures {summary.failure_count}, output {args.output.resolve()}",
         file=sys.stderr,
     )
 

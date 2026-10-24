@@ -25,6 +25,13 @@ def locate_game() -> GameLocations:
     )
 
 
+def replay_files(replay_directory: Path) -> list[Path]:
+    """Every replay under the replay directory, in a stable order: the matches the game saves at the top level and
+    the downloaded ones (the in-game download button, `mecha fetch-replays`) in one folder per application version."""
+    paths = replay_directory.rglob("*.grbr")
+    return sorted(paths, key=lambda path: path.relative_to(replay_directory).as_posix().casefold())
+
+
 def _locate_from_running_process() -> Path | None:
     if os.name != "nt":
         return None

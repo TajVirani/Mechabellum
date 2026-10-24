@@ -10,6 +10,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from ..collector.locator import replay_files
 from ..collector.replay import ReplayMatch, parse_replay
 
 
@@ -78,26 +79,27 @@ def scan_replays(replay_directory: Path) -> DatasetStats:
     stats = DatasetStats()
     seen_hashes: set[str] = set()
     seen_battles: set[str] = set()
-    for path in sorted(replay_directory.glob("*.grbr"), key=lambda item: item.name.casefold()):
+    for path in replay_files(replay_directory):
+        name = path.relative_to(replay_directory).as_posix()
         stats.replay_files += 1
         digest = hashlib.sha256(path.read_bytes()).hexdigest().upper()
         try:
             replay = parse_replay(path)
         except Exception as error:
-            stats.parse_failures.append(f"{path.name}: {error}")
+            stats.parse_failures.append(f"{name}: {error}")
             continue
         entry = _entry(path, digest, replay)
         stats.versions[f"{entry.version}/{entry.game_mode}"] += 1
         # The same match can be saved twice (for example by both a player and a spectator).
         if digest in seen_hashes or (entry.battle_id is not None and entry.battle_id in seen_battles):
-            stats.duplicates.append(path.name)
+            stats.duplicates.append(name)
             continue
         seen_hashes.add(digest)
         if entry.battle_id is not None:
             seen_battles.add(entry.battle_id)
         reasons = abnormal_reasons(entry)
         if reasons:
-            stats.abnormal[path.name] = reasons
+            stats.abnormal[name] = reasons
         else:
             stats.usable.append(entry)
     return stats

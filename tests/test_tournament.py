@@ -2,9 +2,11 @@ from pathlib import Path
 
 import pytest
 
-from mechabellum.bridge import BridgeClient, BridgeError
-from mechabellum.bridge import bridge_pb2 as pb
-from mechabellum.collector.tournament import fetch_replays
+pytest.importorskip("google.protobuf")
+
+from mechabellum.bridge import BridgeClient, BridgeError  # noqa: E402
+from mechabellum.bridge import bridge_pb2 as pb  # noqa: E402
+from mechabellum.collector.tournament import fetch_replays  # noqa: E402
 
 CURRENT = "2.0.0.5.2340"
 PREVIOUS = "2.0.0.4.2331"
@@ -179,6 +181,9 @@ def test_a_second_failure_stops_the_run(tmp_path: Path) -> None:
 def test_invalid_versions_are_rejected(tmp_path: Path) -> None:
     with pytest.raises(ValueError):
         fetch_replays(FakeBridge({}), tmp_path, ["latest"])
+    # A game version without the replay format would match no server path.
+    with pytest.raises(ValueError):
+        fetch_replays(FakeBridge({}), tmp_path, ["2.0.0.5"])
 
 
 class FakeConnection:

@@ -26,6 +26,7 @@ from ...contracts import (
     UnitTechnologySet,
 )
 from ..unit_catalog import unit_name
+from ..versions import split_application_version
 from .extractor import extract_battle_record
 
 T = TypeVar("T")
@@ -110,6 +111,8 @@ class PlayerHistory:
 class ReplayMatch:
     source_file: Path
     version: int | None
+    # The game version from the folder the game saves downloaded replays in, such as 2.0.0.5.2340/.
+    game_version: str | None
     battle_id: str | None
     map_id: int | None
     game_mode: str | None
@@ -149,9 +152,11 @@ def parse_replay(path: Path) -> ReplayMatch:
     teams = [player.team for player in players]
     if None in teams or len(set(teams)) < 2:
         players = [replace(player, team=None) for player in players]
+    version = _optional_int(root, "Version")
     return ReplayMatch(
         source_file=path.resolve(),
-        version=_optional_int(root, "Version"),
+        version=version,
+        game_version=_folder_game_version(path, version),
         battle_id=_text(battle_info, "BattleID"),
         map_id=_optional_int(battle_info, "MapID"),
         game_mode=_text(battle_info, "GameMode"),
@@ -224,7 +229,9 @@ def select_round(replay: ReplayMatch, round_number: int | None = None) -> MatchS
             winner_index=replay.winner_index, winner_player_id=winner.player_id, winner_name=winner.name
         )
     return MatchSnapshot(
-        game_build=GameBuild(replay_version=replay.version, game_version=None, game_assembly_sha256=None),
+        game_build=GameBuild(
+            replay_version=replay.version, game_version=replay.game_version, game_assembly_sha256=None
+        ),
         source=SnapshotSource(type="replay", uri=replay.source_file.as_uri(), captured_at_utc=None),
         match=MatchInfo(
             battle_id=replay.battle_id,
@@ -553,3 +560,12 @@ def _float(parent: ElementTree.Element | None, name: str) -> float:
         return float(value) if value is not None else 0.0
     except ValueError:
         return 0.0
+
+
+def _folder_game_version(path: Path, replay_format: int | None) -> str | None:
+    """The game version of a replay saved in a folder named after the application version, when the folder's
+    replay format matches the file's; the game's own saves at the top level carry none."""
+    parsed = split_application_version(path.parent.name)
+    if parsed is None or replay_format is None or parsed[1] != replay_format:
+        return None
+    return parsed[0]

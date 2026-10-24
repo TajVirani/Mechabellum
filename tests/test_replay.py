@@ -61,6 +61,28 @@ def test_dataset_export_uses_replay_parser(tmp_path: Path) -> None:
     assert snapshots[0].match.battle_id == "fixture-battle"
 
 
+def test_dataset_export_reads_version_folders_and_counts_matches_without_a_winner(tmp_path: Path) -> None:
+    # Downloaded replays sit in one folder per application version; tournament replays name no winner.
+    for folder in ("1.11.0.2a.2119", "2.0.0.4.2331"):
+        (tmp_path / folder).mkdir()
+    _write_replay(tmp_path / "1.11.0.2a.2119" / "1.rep.grbr")
+    _write_replay(tmp_path / "2.0.0.4.2331" / "2.rep.grbr")
+    unranked = tmp_path / "2.0.0.4.2331" / "3.rep.grbr"
+    _write_replay(unranked)
+    unranked.write_bytes(
+        unranked.read_bytes()
+        .replace(b"<teamRanks><int>0</int><int>1</int></teamRanks>", b"<teamRanks />")
+        .replace(b"fixture-battle", b"other-battle")
+    )
+    output = tmp_path / "snapshots.jsonl"
+    summary = export_replay_directory(tmp_path, output)
+    snapshots = load_snapshots(output)
+    assert (summary.replay_file_count, summary.match_count, summary.no_winner_count) == (3, 1, 1)
+    # The folder names the game version only when its replay format matches the file's.
+    assert snapshots[0].game_build.game_version == "1.11.0.2a"
+    assert parse_replay(tmp_path / "2.0.0.4.2331" / "2.rep.grbr").game_version is None
+
+
 def _round_record(round_number: int, extra: str = "", actions: str = "") -> str:
     return (
         f"<PlayerRoundRecord><round>{round_number}</round><actionRecords>{actions}</actionRecords>"

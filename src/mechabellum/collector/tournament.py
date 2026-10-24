@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol, TypeVar
 
+from .versions import application_version_key
+
 ENDED_STATE = 5
 DEFAULT_STOP_AFTER = 10
 
@@ -44,9 +46,11 @@ def fetch_replays(
     """
     wanted: dict[str, tuple[int, ...]] = {}
     for version in versions:
-        key = _version_key(version)
+        key = application_version_key(version)
         if key is None:
-            raise ValueError(f"invalid version {version!r}; expected dotted numbers such as 2.0.0.5.2340.")
+            raise ValueError(
+                f"invalid version {version!r}; expected the game version and replay format, such as 2.0.0.5.2340."
+            )
         wanted[version] = key
     if not wanted:
         raise ValueError("at least one version is required.")
@@ -78,7 +82,7 @@ def _walk(
                     continue
                 seen.add(path)
                 version, _, file_name = path.partition("/")
-                key = _version_key(version)
+                key = application_version_key(version)
                 if key is not None and key < wanted[oldest_version]:
                     return f"reached version {version}, older than {oldest_version}"
                 if version not in wanted:
@@ -130,10 +134,3 @@ def _retry(call: Callable[[], T]) -> T:
         return call()
     except Exception:
         return call()
-
-
-def _version_key(version: str) -> tuple[int, ...] | None:
-    try:
-        return tuple(int(part) for part in version.split("."))
-    except ValueError:
-        return None
