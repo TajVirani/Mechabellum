@@ -1,0 +1,113 @@
+// Game bridge protocol v1: the MechaBridge mod (inside the game), the mecha CLI and the website.
+//
+// Transport: a WebSocket server hosted by the mod on ws://127.0.0.1:<port>/ (default 17615).
+// Every WebSocket binary frame holds exactly one Envelope.
+//
+// Requests and replies: the client picks a nonzero `id`; the mod answers with an Envelope carrying
+// the same `id` and either the matching reply or `error`. Envelopes with `id` 0 are events pushed
+// by the mod; clients ignore event types they do not know.
+//
+// Compatibility: fields are only ever added. Field numbers are never reused or renumbered.
+syntax = "proto3";
+
+package mechabellum.bridge.v1;
+
+option csharp_namespace = "MechaBridge.Protocol";
+
+message Envelope {
+  uint64 id = 1;
+  oneof body {
+    Error error = 2;
+
+    StatusRequest status_request = 10;
+    StatusReply status_reply = 11;
+
+    ListCompetitionsRequest list_competitions_request = 20;
+    ListCompetitionsReply list_competitions_reply = 21;
+    CompetitionPageRequest competition_page_request = 22;
+    CompetitionPageReply competition_page_reply = 23;
+
+    DownloadReplayRequest download_replay_request = 30;
+    DownloadReplayReply download_replay_reply = 31;
+  }
+  // Field numbers 100 and up are reserved for live game events.
+}
+
+message Error {
+  // Stable machine-readable code: "invalid_request", "not_online", "timeout", "game_error", "busy".
+  string code = 1;
+  string message = 2;
+}
+
+message StatusRequest {}
+
+message StatusReply {
+  uint32 protocol_version = 1;
+  string mod_version = 2;
+  // Application.version, e.g. "2.0.0.5.2340". Same shape as the prefix of a replay path.
+  string game_version = 3;
+  bool online = 4;
+  // FileUtility.ReplayDirectoryFullPath, where the game saves replays.
+  string replay_directory = 5;
+  // Minimum time the mod waits between requests it sends to the game's servers.
+  uint32 server_request_interval_ms = 6;
+}
+
+// Past tournaments (the game calls them competitions), one page of the in-game history list.
+message ListCompetitionsRequest {
+  // 1-based.
+  int32 page = 1;
+}
+
+message ListCompetitionsReply {
+  int32 page = 1;
+  int32 page_count = 2;
+  repeated Competition competitions = 3;
+}
+
+message Competition {
+  int32 id = 1;
+  // Unix seconds.
+  int64 start_time = 2;
+  repeated int32 sub_ids = 3;
+  // Whether the tournament came from the history list or from the recent list (ended mini tournaments).
+  CompetitionSource source = 4;
+}
+
+enum CompetitionSource {
+  COMPETITION_SOURCE_UNSPECIFIED = 0;
+  COMPETITION_SOURCE_HISTORY = 1;
+  COMPETITION_SOURCE_RECENT = 2;
+}
+
+// One page of a tournament bracket's ranking, which lists every round each team played.
+message CompetitionPageRequest {
+  int32 competition_id = 1;
+  int32 sub_id = 2;
+  // 1-based.
+  int32 page = 3;
+}
+
+message CompetitionPageReply {
+  int32 competition_id = 1;
+  int32 sub_id = 2;
+  int32 page = 3;
+  int32 page_count = 4;
+  // The game's bracket state; 5 means ended.
+  int32 state = 5;
+  // Server replay paths "<game version>/<numeric id>.rep", deduplicated, in the order the page lists them.
+  repeated string replay_paths = 6;
+}
+
+message DownloadReplayRequest {
+  // A replay path from CompetitionPageReply.
+  string replay_path = 1;
+}
+
+message DownloadReplayReply {
+  string replay_path = 1;
+  // Absolute path of the .rep.grbr the game saved.
+  string file_path = 2;
+  // False when the file already existed and nothing was downloaded.
+  bool downloaded = 3;
+}

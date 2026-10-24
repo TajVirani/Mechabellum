@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>MechaBridge</AssemblyName>
+    <RootNamespace>MechaBridge</RootNamespace>
+    <Version>0.1.0</Version>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <!-- Override with: dotnet build -p:GameDir="E:\Games\Mechabellum" -->
+    <GameDir Condition="'$(GameDir)' == ''">D:\STEAM\steamapps\common\Mechabellum</GameDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Google.Protobuf" Version="3.28.3" />
+    <PackageReference Include="Grpc.Tools" Version="2.67.0" PrivateAssets="all" />
+    <Protobuf Include="..\..\contracts\bridge\v1\bridge.proto" GrpcServices="None" Link="Protocol\bridge.proto" />
+  </ItemGroup>
+
+  <!-- MelonLoader and the interop assemblies it generates on the game's first launch with MelonLoader installed. -->
+  <ItemGroup>
+    <Reference Include="$(GameDir)\MelonLoader\net6\MelonLoader.dll" Private="false" />
+    <Reference Include="$(GameDir)\MelonLoader\net6\0Harmony.dll" Private="false" />
+    <Reference Include="$(GameDir)\MelonLoader\net6\Il2CppInterop.Runtime.dll" Private="false" />
+    <Reference Include="$(GameDir)\MelonLoader\net6\Il2CppInterop.Common.dll" Private="false" />
+    <Reference Include="$(GameDir)\MelonLoader\Il2CppAssemblies\*.dll" Private="false" />
+  </ItemGroup>
+
+</Project>

@@ -62,6 +62,20 @@ def _parser() -> argparse.ArgumentParser:
     live_predict.add_argument("--interval", type=int, default=500)
     live_predict.add_argument("--model", type=Path, default=Path("artifacts/win_model.joblib"))
 
+    fetch = _command(
+        commands, "fetch-replays", "Download tournament replays through the MechaBridge mod, newest first.", _fetch_replays
+    )
+    fetch.add_argument(
+        "--versions", nargs="+", help="Game versions such as 2.0.0.5.2340; defaults to the running game's version."
+    )
+    fetch.add_argument("--stop-after", type=int, default=10, help="Stop after this many already downloaded replays in a row.")
+    fetch.add_argument(
+        "--full",
+        action="store_true",
+        help="Walk to the oldest requested version even past downloaded replays, to resume an interrupted backfill.",
+    )
+    fetch.add_argument("--port", type=int, help="MechaBridge WebSocket port, default 17615.")
+
     train = _command(commands, "train", "Train a final win probability model from MatchSnapshot JSONL.", _train)
     train.add_argument("--dataset", type=Path, required=True)
     train.add_argument("--output", type=Path, default=Path("artifacts/win_model.joblib"))
@@ -197,6 +211,33 @@ def _live_predict(args: argparse.Namespace) -> None:
             except ObserverStateError as error:
                 print(str(error), file=sys.stderr)
             time.sleep(interval)
+
+
+def _fetch_replays(args: argparse.Namespace) -> int:
+    from ..bridge import DEFAULT_PORT, BridgeClient
+    from ..collector.tournament import fetch_replays
+
+    if args.stop_after < 1:
+        raise ValueError("--stop-after must be at least 1.")
+    with BridgeClient.connect(args.port or DEFAULT_PORT) as bridge:
+        status = bridge.status()
+        if not status.online:
+            raise RuntimeError("the game is not online; wait for it to log in at the main menu.")
+        versions = args.versions or [status.game_version]
+        print(f"Versions: {', '.join(versions)}  Replay directory: {status.replay_directory}", file=sys.stderr)
+        summary = fetch_replays(
+            bridge,
+            Path(status.replay_directory),
+            versions,
+            None if args.full else args.stop_after,
+            log=lambda line: print(line, flush=True),
+        )
+    print(
+        f"Fetch {'failed' if summary.failed else 'complete'}: downloaded {summary.downloaded}, "
+        f"already present {summary.present}, other versions {summary.skipped_version}. Stopped: {summary.stop_reason}",
+        file=sys.stderr,
+    )
+    return 1 if summary.failed else 0
 
 
 def _train(args: argparse.Namespace) -> None:
