@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 import threading
 from collections.abc import Callable
 from pathlib import Path
@@ -24,7 +25,8 @@ class ReplayWatcher:
 
     `scan_existing` reads what is there at start-up. After that, `poll` runs every ~2 s: a new or changed file is
     parsed once its size and mtime are unchanged over two polls, so a replay the game is still writing is left
-    alone. Each new summary goes to `on_summary`.
+    alone. Each new summary goes to `on_summary`. When a summary goes away (its replay was deleted, or now is
+    skipped), the whole remaining set goes to `on_summaries` instead.
     """
 
     def __init__(
@@ -33,11 +35,15 @@ class ReplayWatcher:
         cache: SummaryCache,
         on_summary: Callable[[dict[str, Any]], None],
         *,
+        on_summaries: Callable[[list[dict[str, Any]]], None] | None = None,
         interval_seconds: float = POLL_SECONDS,
     ) -> None:
         self._dir = replay_dir
         self._cache = cache
         self._on_summary = on_summary
+        self._on_summaries = on_summaries
+        # The current summary of every known replay that makes one.
+        self._summaries: dict[Path, dict[str, Any]] = {}
         self._interval = interval_seconds
         self._known: dict[Path, tuple[int, int]] = {}
         self._pending: dict[Path, tuple[int, int]] = {}
@@ -51,8 +57,12 @@ class ReplayWatcher:
             self._known[path] = state
             summary = self._summarize(path, state)
             if summary is not None:
+                self._summaries[path] = summary
                 summaries.append(summary)
         return summaries
+
+    def summaries(self) -> list[dict[str, Any]]:
+        return list(self._summaries.values())
 
     def poll(self) -> list[dict[str, Any]]:
         """One poll: the summaries of files that became stable since the last one."""
@@ -69,13 +79,26 @@ class ReplayWatcher:
         for path in list(self._pending):
             if path not in states:
                 del self._pending[path]
+        removed = False
+        for path in [path for path in self._known if path not in states]:
+            del self._known[path]
+            self._cache.forget(path)
+            removed = self._summaries.pop(path, None) is not None or removed
         summaries = []
         for path in ready:
             state = self._pending.pop(path)
             self._known[path] = state
             summary = self._summarize(path, state)
             if summary is not None:
+                self._summaries[path] = summary
                 summaries.append(summary)
+            else:
+                removed = self._summaries.pop(path, None) is not None or removed
+        if removed and self._on_summaries is not None:
+            # Upserts can't express a removal, so resend the full set (it already holds this poll's new rows).
+            self._on_summaries(self.summaries())
+        else:
+            for summary in summaries:
                 self._on_summary(summary)
         return summaries
 
@@ -83,16 +106,20 @@ class ReplayWatcher:
         self._thread = threading.Thread(target=self._run, name="replay-watcher", daemon=True)
         self._thread.start()
 
-    def stop(self) -> None:
+    def stop(self, timeout: float | None = None) -> None:
+        """Stop polling; with a timeout, also wait (that long at most) for a poll in progress to finish."""
         self._stop.set()
+        if timeout is not None and self._thread is not None and self._thread is not threading.current_thread():
+            self._thread.join(timeout)
 
     def _run(self) -> None:
         while not self._stop.wait(self._interval):
             try:
                 self.poll()
-            except OSError:
-                # The folder can vanish or be locked briefly; the next poll tries again.
-                continue
+            except Exception as error:
+                # The folder can vanish or be locked briefly, or the cache can be busy; never let one bad poll end
+                # the watcher. The next poll tries again.
+                print(f"Visualizer: replay poll failed: {error!r}", file=sys.stderr, flush=True)
 
     def _states(self) -> dict[Path, tuple[int, int]]:
         states = {}

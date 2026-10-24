@@ -14,6 +14,8 @@ from .baseline import compute_baseline
 # Share of summaries a player id must appear in to be suggested as the Local Player.
 SUGGESTION_SHARE = 0.6
 CLOSED = None
+# Events a client may fall behind by before it is dropped; the browser then reconnects to a fresh catch-up.
+CLIENT_QUEUE_LIMIT = 256
 
 
 def encode_event(name: str, data: Any) -> bytes:
@@ -100,10 +102,11 @@ class Hub:
 
     def subscribe(self) -> queue.Queue[bytes | None]:
         """A new client queue, preloaded with the catch-up; None in the queue means the server is closing."""
-        client: queue.Queue[bytes | None] = queue.Queue()
         with self._lock:
-            for name, data in self._catch_up():
-                client.put(encode_event(name, data))
+            events = self._catch_up()
+            client: queue.Queue[bytes | None] = queue.Queue(maxsize=CLIENT_QUEUE_LIMIT + len(events))
+            for name, data in events:
+                client.put_nowait(encode_event(name, data))
             self._clients.add(client)
         return client
 
@@ -114,7 +117,7 @@ class Hub:
     def close(self) -> None:
         with self._lock:
             for client in self._clients:
-                client.put(CLOSED)
+                _close_client(client)
             self._clients.clear()
 
     # ---- writing ---------------------------------------------------------------------------------------------
@@ -157,7 +160,8 @@ class Hub:
         with self._lock:
             self._frame = frame
             match = frame.get("snapshot", {}).get("match", {})
-            if match.get("battleId") != self._round_battle:
+            # A frame without a battle id doesn't start a new battle's round history.
+            if match.get("battleId") is not None and match.get("battleId") != self._round_battle:
                 self._round_battle = match.get("battleId")
                 self._round_frames = {}
             if match.get("phase") == "fight_over" and isinstance(match.get("round"), int):
@@ -226,8 +230,24 @@ class Hub:
 
     def _send(self, name: str, data: Any) -> None:
         message = encode_event(name, data)
-        for client in self._clients:
-            client.put(message)
+        for client in list(self._clients):
+            try:
+                client.put_nowait(message)
+            except queue.Full:
+                # A stalled client: drop it rather than buffer without bound. Its stream ends and the browser
+                # reconnects to a fresh catch-up.
+                self._clients.discard(client)
+                _close_client(client)
+
+
+def _close_client(client: queue.Queue[bytes | None]) -> None:
+    """Replace whatever the client still has queued with the close marker."""
+    while True:
+        try:
+            client.get_nowait()
+        except queue.Empty:
+            break
+    client.put_nowait(CLOSED)
 
 
 def _summary_key(row: dict[str, Any]) -> str:

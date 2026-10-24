@@ -146,3 +146,42 @@ def test_catalog(server: Visualizer) -> None:
     }
     assert catalog["units"]["6"]["air"] is True and catalog["units"]["6"]["members"] == 12
     assert len(catalog["units"]) == 33
+
+
+def test_events_client_gone_before_headers_is_unsubscribed(server: Visualizer) -> None:
+    import io
+
+    from mechabellum.visualizer.server import _Handler
+
+    class Gone(io.RawIOBase):
+        def write(self, data: bytes) -> int:
+            raise ConnectionAbortedError(10053, "aborted")
+
+    handler = _Handler.__new__(_Handler)
+    handler.server = server.httpd
+    handler.wfile = Gone()
+    handler.request_version = "HTTP/1.1"
+    handler.requestline = "GET /events HTTP/1.1"
+    handler.command = "GET"
+    handler.client_address = ("127.0.0.1", 0)
+    before = len(server.hub._clients)
+    handler._events()
+    assert len(server.hub._clients) == before
+
+
+def test_close_joins_the_worker_threads(tmp_path: Path) -> None:
+    options = VisualizerOptions(
+        port=0,
+        open_browser=False,
+        replay_dir=FIXTURES / "replays",
+        data_dir=tmp_path / "data",
+        playback=FIXTURES / "live" / "playing-match.sample.jsonl",
+        playback_speed=0,
+        model=tmp_path / "missing.joblib",
+    )
+    visualizer = Visualizer(options)
+    visualizer.start()
+    visualizer.close()
+    assert visualizer.watcher is not None and visualizer.watcher._thread is not None
+    assert not visualizer.watcher._thread.is_alive()
+    assert all(not thread.is_alive() for thread in visualizer._threads if thread.name != "http")

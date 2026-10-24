@@ -106,19 +106,15 @@ function bindViews(layout) {
   });
 }
 
-// Auto-switch to Current Match once per new match: when the live state turns "live", or when a frame arrives
-// for a battle this page hasn't shown yet (that covers a catch-up that lands on a finished playback).
+// Auto-switch to Current Match once per match: only while the status is "live" and the frame's battle is new to
+// this page. A live source flapping retrying -> live doesn't switch again, and loading the page onto a match that's
+// already over (status not live) stays on Stats, as the view always opens there.
 function bindAutoSwitch() {
   const seen = new Set();
-  let lastState = null;
   observe(() => {
-    const state = store.status.get()?.state ?? null;
-    if (state === "live" && lastState !== "live") ui.view.set("current");
-    lastState = state;
-  });
-  observe(() => {
+    const live = store.status.get()?.state === "live";
     const battleId = store.frame.get()?.snapshot?.match?.battleId;
-    if (!battleId || seen.has(battleId)) return;
+    if (!live || !battleId || seen.has(battleId)) return;
     seen.add(battleId);
     ui.view.set("current");
   });

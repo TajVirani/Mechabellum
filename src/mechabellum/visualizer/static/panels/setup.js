@@ -26,9 +26,44 @@ function countOf(summaries, playerId) {
   return summaries.filter((s) => (s.players || []).some((p) => p.playerId === playerId)).length;
 }
 
+// The form is built once; observe() only updates the suggestion and visibility, so typed text and focus survive
+// every summaries/hello event.
 export function mount(container) {
   const p = panelShell(container, "setup", "Who are you?", { className: "setup-card" });
-  let error = "";
+  const input = h("input", { type: "text", class: "text-input", placeholder: "Player id, e.g. 281474976710769865", "aria-label": "Player id", spellcheck: "false" });
+  const status = h("p", { class: "form-error" });
+  const suggestion = h("div", { class: "suggestion-slot" });
+  const cancel = h("button", { type: "button", class: "btn ghost", onclick: () => ui.showSetup.set(false) }, "Cancel");
+  const save = async (playerId) => {
+    const value = String(playerId || "").trim();
+    if (!/^\d+$/.test(value)) {
+      status.textContent = "A player id is a number.";
+      return;
+    }
+    try {
+      await setLocalPlayer(value);
+      status.textContent = "";
+      ui.showSetup.set(false);
+    } catch (e) {
+      status.textContent = `Couldn't save: ${e.message}`;
+    }
+  };
+  const form = h(
+    "form",
+    {
+      class: "id-form",
+      onsubmit: (e) => {
+        e.preventDefault();
+        save(input.value);
+      },
+    },
+    input,
+    h("button", { type: "submit", class: "btn" }, "Save id"),
+    cancel,
+  );
+  replace(p.body, h("p", null, "The Stats view counts the matches you played. Pick your player id; it stays the same when you rename."), suggestion, form, status);
+
+  let wasShown = false;
   observe(() => {
     const hello = store.hello.get();
     const id = store.localPlayerId.get();
@@ -36,33 +71,21 @@ export function mount(container) {
     const summaries = store.summaries.get();
     if (!hello || (id && !forced)) {
       p.root.hidden = true;
-      replace(p.body);
+      wasShown = false;
       p.setState("empty");
       return;
     }
     p.root.hidden = false;
+    // Prefill the current id only when the card opens, never over what the user is typing.
+    if (!wasShown) {
+      input.value = id || "";
+      status.textContent = "";
+    }
+    wasShown = true;
+    cancel.hidden = !id;
     const suggested = hello.suggestedPlayerId;
-    const input = h("input", { type: "text", class: "text-input", placeholder: "Player id, e.g. 281474976710769865", value: id || "", "aria-label": "Player id", spellcheck: "false" });
-    const status = h("p", { class: "form-error" }, error);
-    const save = async (playerId) => {
-      const value = String(playerId || "").trim();
-      if (!/^\d+$/.test(value)) {
-        error = "A player id is a number.";
-        status.textContent = error;
-        return;
-      }
-      try {
-        await setLocalPlayer(value);
-        error = "";
-        ui.showSetup.set(false);
-      } catch (e) {
-        error = `Couldn't save: ${e.message}`;
-        status.textContent = error;
-      }
-    };
     replace(
-      p.body,
-      h("p", null, "The Stats view counts the matches you played. Pick your player id; it stays the same when you rename."),
+      suggestion,
       suggested
         ? h(
             "div",
@@ -76,20 +99,6 @@ export function mount(container) {
             h("button", { type: "button", class: "btn primary", "data-action": "use-suggested", onclick: () => save(suggested) }, "That's me"),
           )
         : h("p", { class: "muted" }, "No player appears in most of your replays, so there's no suggestion."),
-      h(
-        "form",
-        {
-          class: "id-form",
-          onsubmit: (e) => {
-            e.preventDefault();
-            save(input.value);
-          },
-        },
-        input,
-        h("button", { type: "submit", class: "btn" }, "Save id"),
-        id ? h("button", { type: "button", class: "btn ghost", onclick: () => ui.showSetup.set(false) }, "Cancel") : null,
-      ),
-      status,
     );
     p.setState("ready");
   });

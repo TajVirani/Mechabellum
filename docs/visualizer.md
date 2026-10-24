@@ -48,7 +48,7 @@ Static files ship as package data.
 
 ### Match Summary
 
-One per replay, built server-side, cached by (path, size, mtime, `SUMMARY_VERSION`). Only 1v1 (`VS_1_1`) replays with a known winner become summaries; others are recorded as skipped so they aren't re-parsed. JSON, camelCase:
+One per replay, built server-side, cached by (path, size, mtime, `SUMMARY_CACHE_KEY`). The cache key combines `SUMMARY_VERSION` with a hash of `unit_roles.json`, `game_names.json` and the known game-version table, so a change to any of them rebuilds the cached summaries. Only 1v1 (`VS_1_1`) replays with a known winner become summaries; others are recorded as skipped so they aren't re-parsed. JSON, camelCase:
 
 ```jsonc
 {
@@ -113,7 +113,7 @@ Each event is `event: <name>` plus `data: <json>`. On connect, the server sends 
 | Event | Data |
 | --- | --- |
 | `hello` | `{serverVersion, localPlayerId, suggestedPlayerId, modelAvailable, replayDir, liveSource: "memory" \| "playback" \| "none"}` |
-| `summaries` | `{rows: [MatchSummary]}`: the full set |
+| `summaries` | `{rows: [MatchSummary]}`: the full set. Also resent whenever a summary goes away (its replay was deleted, or now is skipped); the browser replaces its rows |
 | `summary` | `{row: MatchSummary}`: upsert by `battleId` |
 | `baseline` | `{byRound: {"1": {roles, air, hitsAir, bodies, n, thin}, …}, overall: {…}}` |
 | `ratings` | `{byBattle: {battleId: {playerId: rating}}}`: full |
@@ -123,6 +123,8 @@ Each event is `event: <name>` plus `data: <json>`. On connect, the server sends 
 | `prediction` | `{battleId, round, leftWinProbability, swing}` |
 | `status` | `{state: "waiting" \| "live" \| "retrying" \| "no_game" \| "layout_mismatch" \| "playback_done" \| "off", detail, gameVersion, bridge: "online" \| "offline" \| "absent"}` |
 | `config` | `{localPlayerId}` |
+
+**Slow clients:** each client's queue holds at most ~256 pending events. A client that falls further behind is dropped; its stream ends and the browser reconnects to a fresh catch-up.
 
 **When events fire:**
 - **Frames** are deduplicated like `record_live_snapshots` (ignoring capture time).
@@ -153,7 +155,7 @@ The seven panels:
 
 ## Current Match view
 
-The view opens on Stats and auto-switches to Current Match when a match goes live. A tab bar switches between them by hand. Left is the Local Player in blue, right is the opponent in red. When spectating, left is player 0 and both sides show names only.
+The view opens on Stats and auto-switches to Current Match when a match goes live: only while the status is `live` and the frame's `battleId` is new to this page. A `retrying` → `live` flap within the same match doesn't switch again, and loading the page onto a match that's already over (status not `live`) stays on Stats. A tab bar switches between them by hand. Left is the Local Player in blue, right is the opponent in red. When spectating, left is player 0 and both sides show names only.
 
 1. **Header:** names, ratings, round, phase, HP (`reactorCore`), supply and income for both sides.
 2. **Win probability** (ECharts): the left player's probability per round, with a 50% midline and swing markers sized by `|swing|`. Shows "model unavailable" when `modelAvailable` is false.

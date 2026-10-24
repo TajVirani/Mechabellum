@@ -24,6 +24,8 @@ function passes(s, f) {
   if (f.mode === "normal" && s.gameMode !== "Normal") return false;
   if (f.mode === "async" && s.gameMode !== "AsyncBattle") return false;
   if (f.versions && f.versions.length && !f.versions.includes(versionKey(s))) return false;
+  // An undated row can't be placed in a date range, so it fails any active date filter.
+  if ((f.from || f.to) && !s.date) return false;
   if (f.from && s.date < f.from) return false;
   if (f.to && s.date > f.to) return false;
   return true;

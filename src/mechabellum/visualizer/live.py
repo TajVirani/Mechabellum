@@ -83,7 +83,9 @@ class LiveProcessor:
             if fingerprint == self._previous:
                 return False
             self._previous = fingerprint
-            if snapshot.match.battle_id != self._battle_id or self._snapshot is None:
+            # A frame without a battle id (read between matches) doesn't start a new battle.
+            battle_id = snapshot.match.battle_id
+            if self._snapshot is None or (battle_id is not None and battle_id != self._battle_id):
                 self._battle_id = snapshot.match.battle_id
                 self._rounds = []
                 self._hub.set_predictions(self._battle_id, [])
@@ -139,7 +141,7 @@ class LiveProcessor:
         }
 
     def _predict(self, snapshot: MatchSnapshot, local: int | None) -> None:
-        key = (snapshot.match.battle_id, snapshot.match.round)
+        key = (self._battle_id, snapshot.match.round)
         # The board is cleared when the match ends, so skip fight_over frames without units (as live-predict does).
         ready = snapshot.match.phase == MODEL_SNAPSHOT_PHASE and all(player.units for player in snapshot.players)
         if not ready or key in self._emitted or self._predictor is None:

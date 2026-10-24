@@ -71,10 +71,11 @@ function armyValue(player) {
 
 function recordFrame(frame) {
   const snapshot = frame.snapshot;
-  const battleId = snapshot?.match?.battleId ?? null;
+  const previous = store.match.peek();
+  // A frame without a battle id (a read between matches' ids) belongs to the current match; don't reset it.
+  const battleId = snapshot?.match?.battleId ?? previous?.battleId ?? null;
   const round = snapshot?.match?.round ?? 0;
   const phase = snapshot?.match?.phase;
-  const previous = store.match.peek();
   const rounds = previous && previous.battleId === battleId ? { ...previous.rounds } : {};
   const players = snapshot?.players || [];
   const entry = { ...(rounds[round] || {}) };

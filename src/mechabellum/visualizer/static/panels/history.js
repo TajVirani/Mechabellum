@@ -4,7 +4,7 @@ import { observe } from "../vendor/legend-state.mjs";
 import { store } from "../store.js";
 import { filteredMatches, statsEmptyReason } from "../selectors.js";
 import { rollingWinRate, myRating, versionKey } from "../stats.js";
-import { h, panelShell, replace, empty, makeChart, baseChartOptions, axis, cssVar, FONT } from "../ui.js";
+import { h, panelShell, replace, empty, makeChart, baseChartOptions, axis, cssVar, FONT, escapeHtml } from "../ui.js";
 
 export function mount(container) {
   const p = panelShell(container, "history", "History", { className: "chart-panel" });
@@ -54,8 +54,8 @@ export function mount(container) {
           formatter: (items) => {
             const i = items[0].dataIndex;
             const m = matches[i];
-            const lines = [`${m.s.date} vs ${m.opp?.name ?? "?"} — ${m.won ? "Win" : "Loss"}`];
-            for (const it of items) if (it.value != null) lines.push(`${it.marker}${it.seriesName}: ${it.value}${it.seriesIndex === 0 ? "%" : ""}`);
+            const lines = [`${escapeHtml(m.s.date)} vs ${escapeHtml(m.opp?.name ?? "?")} — ${m.won ? "Win" : "Loss"}`];
+            for (const it of items) if (it.value != null) lines.push(`${it.marker}${escapeHtml(it.seriesName)}: ${escapeHtml(it.value)}${it.seriesIndex === 0 ? "%" : ""}`);
             return lines.join("<br>");
           },
         },

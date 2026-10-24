@@ -239,3 +239,20 @@ def test_unsupported_game_build_reports_layout_mismatch(tmp_path: Path) -> None:
 
 def test_model_guess(tmp_path: Path) -> None:
     assert model_looks_available(tmp_path / "missing.joblib") is False
+
+
+def test_a_frame_without_a_battle_id_does_not_reset_the_match(tmp_path: Path) -> None:
+    hub = make_hub()
+    processor = LiveProcessor(hub, SummaryCache(tmp_path / "v.sqlite"), FakePredictor())
+    played = frames()
+    for frame in played[:-1]:
+        processor.process(frame)
+    before = dict(hub.catch_up())["predictions"]
+    assert before["battleId"] == BATTLE and before["rows"]
+    anonymous = played[-1].model_copy(update={"match": played[-1].match.model_copy(update={"battle_id": None})})
+    processor.process(anonymous)
+    after = dict(hub.catch_up())
+    assert after["predictions"] == before
+    round_frames = [data for name, data in hub.catch_up() if name == "frame"]
+    # The round history survives: rounds 1-10 plus the latest frame.
+    assert len(round_frames) == 11

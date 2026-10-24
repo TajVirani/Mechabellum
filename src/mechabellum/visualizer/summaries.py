@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from datetime import UTC, datetime
@@ -48,6 +49,27 @@ def _known_game_versions() -> dict[int, str]:
 
 
 KNOWN_GAME_VERSIONS = _known_game_versions()
+
+
+def summary_cache_key(version: int, *inputs: bytes) -> str:
+    """The cache key for summaries built by `version` of the code from these data files.
+
+    Prefixed with a letter so sqlite never coerces it to a number.
+    """
+    digest = hashlib.sha256()
+    for item in inputs:
+        digest.update(hashlib.sha256(item).digest())
+    return f"v{version}-{digest.hexdigest()[:16]}"
+
+
+# What a cached summary depends on besides the replay: this code's SUMMARY_VERSION, the role table, the names and
+# prices (game_names.json) and the known game-version table. Any change rebuilds the cached summaries.
+SUMMARY_CACHE_KEY = summary_cache_key(
+    SUMMARY_VERSION,
+    files(__package__).joinpath("unit_roles.json").read_bytes(),
+    files("mechabellum.collector").joinpath("game_names.json").read_bytes(),
+    json.dumps(sorted(KNOWN_GAME_VERSIONS.items())).encode(),
+)
 
 
 def summarize_replay(path: Path, replay_root: Path | None = None) -> dict[str, Any]:

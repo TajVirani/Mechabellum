@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .summaries import SUMMARY_VERSION
+from .summaries import SUMMARY_CACHE_KEY
 
 DATABASE_NAME = "visualizer.sqlite"
 CONFIG_NAME = "visualizer.json"
@@ -29,7 +29,7 @@ class CachedSummary:
 
 
 class SummaryCache:
-    """sqlite cache of Match Summaries keyed by (path, size, mtime, SUMMARY_VERSION), plus pre-match ratings."""
+    """sqlite cache of Match Summaries keyed by (path, size, mtime, SUMMARY_CACHE_KEY), plus pre-match ratings."""
 
     def __init__(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -56,7 +56,7 @@ class SummaryCache:
                 "SELECT size, mtime_ns, version, summary, skipped_reason FROM summaries WHERE path = ?",
                 (str(path),),
             ).fetchone()
-        if row is None or (row[0], row[1], row[2]) != (size, mtime_ns, SUMMARY_VERSION):
+        if row is None or (row[0], row[1], row[2]) != (size, mtime_ns, SUMMARY_CACHE_KEY):
             return None
         return CachedSummary(None if row[3] is None else json.loads(row[3]), row[4])
 
@@ -65,8 +65,13 @@ class SummaryCache:
         with self._lock, self._db:
             self._db.execute(
                 "INSERT OR REPLACE INTO summaries VALUES (?, ?, ?, ?, ?, ?)",
-                (str(path), size, mtime_ns, SUMMARY_VERSION, summary, entry.skipped_reason),
+                (str(path), size, mtime_ns, SUMMARY_CACHE_KEY, summary, entry.skipped_reason),
             )
+
+    def forget(self, path: Path) -> None:
+        """Drop the cached entry of a replay that no longer exists."""
+        with self._lock, self._db:
+            self._db.execute("DELETE FROM summaries WHERE path = ?", (str(path),))
 
     def store_rating(self, battle_id: str, player_id: str, rating: int) -> bool:
         """Keep the first rating seen for (battle, player) as its pre-match rating; True when it was new."""

@@ -2,7 +2,7 @@
 // Army value is the board's total sellSupply; HP is reactorCore.
 import { observe } from "../vendor/legend-state.mjs";
 import { store } from "../store.js";
-import { h, panelShell, replace, empty, makeChart, baseChartOptions, axis, cssVar, FONT, sides } from "../ui.js";
+import { h, panelShell, replace, empty, makeChart, baseChartOptions, axis, cssVar, FONT, sides, escapeHtml } from "../ui.js";
 
 export function mount(container) {
   const p = panelShell(container, "army-hp", "Army value and HP", { className: "chart-panel" });
@@ -55,6 +55,12 @@ export function mount(container) {
       {
         ...base,
         grid: { left: 48, right: 52, top: 54, bottom: 26 },
+        // Series names carry player names; build the tooltip HTML with them escaped.
+        tooltip: {
+          ...base.tooltip,
+          formatter: (items) =>
+            [`Round ${escapeHtml(items[0]?.axisValue)}`, ...items.filter((it) => it.value != null).map((it) => `${it.marker}${escapeHtml(it.seriesName)}: ${escapeHtml(it.value)}`)].join("<br>"),
+        },
         legend: { top: 0, left: 0, textStyle: { color: cssVar("--text-secondary"), fontFamily: FONT, fontSize: 11 }, itemHeight: 8, itemWidth: 18, formatter: (name) => (name.length > 22 ? `${name.slice(0, 12)}… ${name.split(" ").pop()}` : name) },
         xAxis: axis("category", { data: rounds.map(String), boundaryGap: false, name: "round", nameGap: 6, splitLine: { show: false } }),
         yAxis: [axis("value", { min: 0 }), axis("value", { min: 0, splitLine: { show: false } })],

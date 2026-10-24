@@ -2,6 +2,9 @@
 
 import * as echarts from "./vendor/echarts.esm.min.js";
 
+// Escape text for ECharts tooltip formatters, which return HTML. Player names come from replays and memory.
+export const escapeHtml = (value) => echarts.format.encodeHTML(String(value ?? ""));
+
 export function h(tag, attrs, ...children) {
   const el = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs || {})) {

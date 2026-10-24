@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from mechabellum.visualizer.hub import CLOSED, Hub, encode_event, suggest_player_id
+from mechabellum.visualizer.hub import CLIENT_QUEUE_LIMIT, CLOSED, Hub, encode_event, suggest_player_id
 
 CATCH_UP = ["hello", "summaries", "baseline", "ratings", "status"]
 
@@ -142,3 +142,15 @@ def test_catch_up_replays_each_rounds_first_fight_over_frame() -> None:
     frames = [data for name, data in state.catch_up() if name == "frame"]
     history = [frame("b1", number, "fight_over") for number in (1, 2, 3)]
     assert frames == [*history, frame("b1", 4, "deploying")]
+
+
+def test_a_stalled_client_is_dropped_with_only_the_close_marker_left() -> None:
+    state = hub()
+    stalled = state.subscribe()
+    for index in range(CLIENT_QUEUE_LIMIT + 50):
+        state.update_status(detail=f"tick {index}")
+    assert stalled not in state._clients
+    assert stalled.qsize() == 1 and stalled.get_nowait() is CLOSED
+    # A reconnecting client starts again from a fresh catch-up.
+    fresh = state.subscribe()
+    assert [name for name, _ in drain(fresh)] == CATCH_UP

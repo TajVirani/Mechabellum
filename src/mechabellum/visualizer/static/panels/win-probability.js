@@ -2,7 +2,7 @@
 // sized by |swing|. Shows "model unavailable" when the server has no model.
 import { observe } from "../vendor/legend-state.mjs";
 import { store } from "../store.js";
-import { h, panelShell, replace, empty, makeChart, baseChartOptions, axis, cssVar, FONT, sides } from "../ui.js";
+import { h, panelShell, replace, empty, makeChart, baseChartOptions, axis, cssVar, FONT, sides, escapeHtml } from "../ui.js";
 
 export function mount(container) {
   const p = panelShell(container, "win-probability", "Win probability", { className: "chart-panel" });
@@ -50,7 +50,7 @@ export function mount(container) {
           formatter: (items) => {
             const it = items.find((x) => x.seriesIndex === 0) || items[0];
             const row = rows[it.dataIndex];
-            return `Round ${row.round}<br>${left.player?.name ?? "Left"}: ${(row.leftWinProbability * 100).toFixed(1)}%<br>Swing: ${row.swing >= 0 ? "+" : ""}${(row.swing * 100).toFixed(1)} pts`;
+            return `Round ${row.round}<br>${escapeHtml(left.player?.name ?? "Left")}: ${(row.leftWinProbability * 100).toFixed(1)}%<br>Swing: ${row.swing >= 0 ? "+" : ""}${(row.swing * 100).toFixed(1)} pts`;
           },
         },
         xAxis: axis("value", { min: 1, max: Math.max(maxRound, 2), interval: 1, name: "round", nameGap: 6, splitLine: { show: false } }),

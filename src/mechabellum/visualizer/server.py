@@ -27,6 +27,8 @@ HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 KEEPALIVE_SECONDS = 15.0
+# How long close() waits for each worker thread before closing the cache under it.
+SHUTDOWN_JOIN_SECONDS = 5.0
 MAX_BODY_BYTES = 4096
 # Served at / until the frontend's static/index.html exists.
 PLACEHOLDER_PAGE = (
@@ -90,7 +92,11 @@ class Visualizer:
             local_player_id=self.config.local_player_id,
         )
         self.processor = LiveProcessor(self.hub, self.cache)
-        self.watcher = None if replay_dir is None else ReplayWatcher(replay_dir, self.cache, self.hub.upsert_summary)
+        self.watcher = (
+            None
+            if replay_dir is None
+            else ReplayWatcher(replay_dir, self.cache, self.hub.upsert_summary, on_summaries=self.hub.set_summaries)
+        )
         self.stop_event = threading.Event()
         self.httpd = _Server((HOST, options.port), _Handler)
         self.httpd.visualizer = self
@@ -143,9 +149,13 @@ class Visualizer:
         self.processor.refresh_local_player()
 
     def close(self) -> None:
+        """Stop everything; the watcher and live threads are joined (bounded) before the cache they write closes."""
         self.stop_event.set()
         if self.watcher is not None:
-            self.watcher.stop()
+            self.watcher.stop(timeout=SHUTDOWN_JOIN_SECONDS)
+        for thread in self._threads:
+            if thread.name != "http" and thread is not threading.current_thread():
+                thread.join(SHUTDOWN_JOIN_SECONDS)
         self.hub.close()
         if self._serving:
             self.httpd.shutdown()
@@ -244,15 +254,17 @@ class _Handler(BaseHTTPRequestHandler):
 
     def _events(self) -> None:
         hub = self.server.visualizer.hub
-        client = hub.subscribe()
-        self.send_response(HTTPStatus.OK)
-        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
-        self.send_header("Cache-Control", "no-cache")
-        self.send_header("Connection", "keep-alive")
-        self.send_header("X-Accel-Buffering", "no")
-        self.end_headers()
         self.close_connection = True
+        client = None
         try:
+            # Subscribed inside the try, so a client gone before the headers are written is always unsubscribed.
+            client = hub.subscribe()
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Connection", "keep-alive")
+            self.send_header("X-Accel-Buffering", "no")
+            self.end_headers()
             self.wfile.write(b"retry: 2000\n\n")
             while True:
                 try:
@@ -266,7 +278,8 @@ class _Handler(BaseHTTPRequestHandler):
         except (BrokenPipeError, ConnectionError, OSError):
             pass
         finally:
-            hub.unsubscribe(client)
+            if client is not None:
+                hub.unsubscribe(client)
 
     def _static(self, path: str, head: bool = False) -> None:
         root = self.server.visualizer.static_dir

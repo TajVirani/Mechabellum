@@ -31,6 +31,12 @@ RECENT = [
     ("miro", True, "wwwww"),
 ]
 ROUNDS = 10
+# Re-sends the current summaries through the store, as a new `summaries` event would.
+REAPPLY_SUMMARIES = """() => {
+  const v = window.__visualizer;
+  v.applyEvent("summaries", { rows: JSON.parse(JSON.stringify(v.store.summaries.get())) });
+}"""
+XSS = "<img src=x onerror=window.__xss=1>"
 # Each fight dot's rendered colour as "w" (--win), "l" (--loss) or "?".
 DOT_COLOURS = """dots => {
   const resolve = (name) => {
@@ -121,6 +127,13 @@ def test_setup_card_suggests_the_local_player_and_use_suggested_fills_stats(brow
         assert LOCAL_PLAYER in text
         assert LOCAL_NAME in text
         assert panel(tab, "record").get_attribute("data-state") == "empty"
+        # The form is built once: typed text and focus survive a stream event that re-renders the card.
+        field = setup.locator("input.text-input")
+        field.click()
+        field.type("12345")
+        tab.page.evaluate(REAPPLY_SUMMARIES)
+        assert field.input_value() == "12345"
+        assert tab.page.evaluate("() => document.activeElement?.classList.contains('text-input')")
         setup.locator('[data-action="use-suggested"]').click()
         wait_ready(tab, "record", "units", "specialists", "openings", "opponents", "recent", "history")
         assert games(tab) == 3
@@ -222,6 +235,93 @@ def test_mode_and_version_filters_change_the_counts(stats_tab: Tab) -> None:
     stats_tab.assert_clean()
 
 
+def test_filter_inputs_survive_stream_events(stats_tab: Tab) -> None:
+    page = stats_tab.page
+    date_from = panel(stats_tab, "filters").locator('[data-filter="from"]')
+    date_from.evaluate("el => { el.__kept = true; }")
+    date_from.focus()
+    page.evaluate(REAPPLY_SUMMARIES)
+    # Same element (not rebuilt), still focused.
+    assert page.evaluate("() => document.querySelector('[data-filter=\"from\"]').__kept === true")
+    assert page.evaluate("() => document.activeElement?.dataset.filter") == "from"
+    date_from.blur()
+
+
+def test_undated_rows_fail_an_active_date_filter(browser: Any, finished: LiveSession) -> None:
+    tab = open_tab(browser, finished.server.url)
+    try:
+        page = tab.page
+        wait_ready(tab, "record")
+        page.evaluate(
+            """() => {
+              const v = window.__visualizer;
+              const rows = JSON.parse(JSON.stringify(v.store.summaries.get()));
+              rows[0].date = null;
+              v.applyEvent("summaries", { rows });
+            }"""
+        )
+        assert games(tab) == 3
+        page.evaluate("() => window.__visualizer.ui.filters.from.set('2000-01-01')")
+        page.wait_for_function("() => document.querySelector('[data-stat=\"games\"] .stat-value')?.innerText === '2'")
+        page.evaluate("() => { const f = window.__visualizer.ui.filters; f.from.set(''); f.to.set('2100-01-01'); }")
+        page.wait_for_function("() => document.querySelector('[data-stat=\"games\"] .stat-value')?.innerText === '2'")
+        page.evaluate("() => window.__visualizer.ui.filters.to.set('')")
+        page.wait_for_function("() => document.querySelector('[data-stat=\"games\"] .stat-value')?.innerText === '3'")
+        tab.assert_clean()
+    finally:
+        tab.page.context.close()
+
+
+def hover_tooltip(tab: Tab, name: str) -> str:
+    """Hover a chart panel's plot area and return its tooltip's text."""
+    chart = panel(tab, name).locator(".chart").first
+    box = chart.bounding_box()
+    assert box is not None, name
+    tooltip = ""
+    for fraction in (0.5, 0.3, 0.7, 0.9):
+        tab.page.mouse.move(box["x"] + box["width"] * fraction, box["y"] + box["height"] * 0.5)
+        tab.page.wait_for_timeout(250)
+        tooltip = chart.evaluate(
+            "el => [...el.querySelectorAll('div')].filter(d => d.style.position === 'absolute' && d.innerText)"
+            ".map(d => d.innerText).join(' | ')"
+        )
+        if "img src=x" in tooltip:
+            break
+    return tooltip
+
+
+def test_player_names_are_escaped_in_chart_tooltips(browser: Any, finished: LiveSession) -> None:
+    tab = open_tab(browser, finished.server.url)
+    try:
+        page = tab.page
+        wait_ready(tab, "history", "match-header")
+        page.evaluate(
+            """(name) => {
+              const v = window.__visualizer;
+              const rows = JSON.parse(JSON.stringify(v.store.summaries.get()));
+              for (const row of rows) for (const p of row.players) if (p.playerId !== v.store.localPlayerId.get()) p.name = name;
+              v.applyEvent("summaries", { rows });
+              const frame = JSON.parse(JSON.stringify(v.store.frame.get()));
+              for (const p of frame.snapshot.players) p.name = name;
+              v.applyEvent("frame", frame);
+            }""",
+            XSS,
+        )
+        # The name shows as text in the history tooltip (escaped), and its onerror never runs.
+        assert "<img src=x" in hover_tooltip(tab, "history")
+        page.locator('.tabs [data-view="current"]').click()
+        page.wait_for_selector('[data-view-container="current"][data-active="true"]', state="attached")
+        page.wait_for_timeout(300)
+        if model_available(tab):
+            assert "<img src=x" in hover_tooltip(tab, "win-probability")
+        assert "<img src=x" in hover_tooltip(tab, "army-hp")
+        page.wait_for_timeout(300)
+        assert page.evaluate("() => window.__xss") is None
+        tab.assert_clean()
+    finally:
+        tab.page.context.close()
+
+
 # ---- Current Match view --------------------------------------------------------------------------------------
 
 
@@ -234,8 +334,15 @@ def assert_bars_sum_to_one(bars: Any, sides: tuple[str, ...]) -> None:
         assert sum(shares) == pytest.approx(1.0, abs=0.002), side
 
 
-def assert_current_match(tab: Tab, *, model_available: bool) -> None:
+def assert_current_match(tab: Tab, *, model_available: bool, switched: bool) -> None:
+    """The finished match, as shown on Current Match. `switched`: the page auto-switched there (it saw the match
+    go live); otherwise it must still be on Stats (loaded onto a match that's already over) and is switched by hand."""
     page = tab.page
+    if not switched:
+        page.wait_for_selector('[data-panel="match-header"][data-state="ready"]', state="attached", timeout=20_000)
+        page.wait_for_timeout(200)
+        assert page.locator('[data-view-container="stats"]').get_attribute("data-active") == "true"
+        page.locator('.tabs [data-view="current"]').click()
     page.wait_for_selector('[data-view-container="current"][data-active="true"]', state="attached", timeout=20_000)
     assert page.locator('[data-view-container="stats"]').get_attribute("data-active") == "false"
     wait_ready(tab, "match-header", "composition", "army-hp", "boards", "offer")
@@ -293,14 +400,14 @@ def model_available(tab: Tab) -> bool:
 def test_early_tab_auto_switches_and_shows_the_match(finished: LiveSession) -> None:
     tab = finished.early
     assert tab.page.evaluate("() => window.__visualizer.store.frame.get().snapshot.match.battleId") == BATTLE_ID
-    assert_current_match(tab, model_available=model_available(tab))
+    assert_current_match(tab, model_available=model_available(tab), switched=True)
     tab.assert_clean()
 
 
 def test_late_tab_rebuilds_the_match_from_the_catch_up(browser: Any, finished: LiveSession) -> None:
     tab = open_tab(browser, finished.server.url)
     try:
-        assert_current_match(tab, model_available=model_available(tab))
+        assert_current_match(tab, model_available=model_available(tab), switched=False)
         # The catch-up resends the latest fight_over frame; it must not add a duplicate point anywhere.
         assert len(tab.page.evaluate("() => window.__visualizer.store.predictions.get().rows")) in (0, ROUNDS)
         tab.assert_clean()
@@ -311,11 +418,11 @@ def test_late_tab_rebuilds_the_match_from_the_catch_up(browser: Any, finished: L
 def test_reload_rebuilds_the_same_state(browser: Any, finished: LiveSession) -> None:
     tab = open_tab(browser, finished.server.url)
     try:
-        assert_current_match(tab, model_available=model_available(tab))
+        assert_current_match(tab, model_available=model_available(tab), switched=False)
         before = store_json(tab)
         tab.page.reload()
         tab.page.wait_for_function("() => window.__visualizer && window.__visualizer.store.hello.get()")
-        assert_current_match(tab, model_available=model_available(tab))
+        assert_current_match(tab, model_available=model_available(tab), switched=False)
         assert store_json(tab) == before
         # The early tab, fed incrementally, agrees with a fresh catch-up too.
         early = store_json(finished.early)

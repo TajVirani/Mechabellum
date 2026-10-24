@@ -24,7 +24,7 @@ def test_cache_hits_only_the_same_file_state_and_version(tmp_path: Path, monkeyp
     assert cache.lookup(path, 11, 100) is None
     assert cache.lookup(path, 10, 101) is None
     assert cache.lookup(tmp_path / "other.grbr", 10, 100) is None
-    monkeypatch.setattr(cache_module, "SUMMARY_VERSION", 999)
+    monkeypatch.setattr(cache_module, "SUMMARY_CACHE_KEY", "v999-0")
     assert cache.lookup(path, 10, 100) is None
     cache.close()
 
@@ -115,4 +115,60 @@ def test_watcher_records_unreadable_replays_as_skipped(tmp_path: Path) -> None:
     )
     broken = cache.lookup(replays / "broken.grbr", 12, (replays / "broken.grbr").stat().st_mtime_ns)
     assert broken is not None and broken.summary is None and broken.skipped_reason.startswith("unreadable")
+    cache.close()
+
+
+def test_cache_key_follows_the_data_files() -> None:
+    key = summaries_module.summary_cache_key(1, b"roles", b"names", b"versions")
+    assert key.startswith("v1-") and not key.replace("-", "").isdigit()
+    assert summaries_module.summary_cache_key(1, b"roles", b"names", b"versions") == key
+    assert summaries_module.summary_cache_key(1, b"roles changed", b"names", b"versions") != key
+    assert summaries_module.summary_cache_key(1, b"roles", b"names", b"versions 2") != key
+    assert summaries_module.summary_cache_key(2, b"roles", b"names", b"versions") != key
+    assert cache_module.SUMMARY_CACHE_KEY == summaries_module.SUMMARY_CACHE_KEY
+
+
+def test_watcher_resends_the_full_set_when_a_replay_is_deleted(tmp_path: Path) -> None:
+    replays = tmp_path / "Replay"
+    replays.mkdir()
+    shutil.copy2(REPLAYS / WIN, replays / WIN)
+    nix = "2340_20261024--67160210_[Nix]VS[Sleep Deprived].grbr"
+    shutil.copy2(REPLAYS / "2.0.0.5.2340" / nix, replays / nix)
+    cache = SummaryCache(tmp_path / "v.sqlite")
+    upserts: list[dict] = []
+    full_sets: list[list[dict]] = []
+    watcher = ReplayWatcher(replays, cache, upserts.append, on_summaries=full_sets.append)
+    assert len(watcher.scan_existing()) == 2
+    stat = (replays / nix).stat()
+    (replays / nix).unlink()
+    watcher.poll()
+    assert upserts == []
+    assert [[row["battleId"] for row in rows] for rows in full_sets] == [["20261022--67509180"]]
+    assert cache.lookup(replays / nix, stat.st_size, stat.st_mtime_ns) is None
+    watcher.poll()
+    assert len(full_sets) == 1
+    cache.close()
+
+
+def test_watcher_thread_survives_a_failing_poll(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import sqlite3
+    import threading
+
+    cache = SummaryCache(tmp_path / "v.sqlite")
+    watcher = ReplayWatcher(tmp_path, cache, lambda _: None, interval_seconds=0.01)
+    calls: list[int] = []
+    second = threading.Event()
+
+    def poll() -> list:
+        calls.append(1)
+        if len(calls) == 1:
+            raise sqlite3.OperationalError("database is locked")
+        second.set()
+        return []
+
+    monkeypatch.setattr(watcher, "poll", poll)
+    watcher.start()
+    assert second.wait(5), "the watcher stopped after a failing poll"
+    watcher.stop(timeout=5)
+    assert watcher._thread is not None and not watcher._thread.is_alive()
     cache.close()
