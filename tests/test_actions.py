@@ -50,6 +50,22 @@ def test_card_effects_are_learned_from_the_next_snapshot() -> None:
     assert catalog.unit_prices[3] == 400
 
 
+def test_prices_come_from_the_game_tables_and_limit_candidates() -> None:
+    data = _example()
+    data["players"][0]["supply"] = 250
+    snapshot = validate_snapshot(data)
+    catalog = ActionCatalog.from_game_data()
+    assert (catalog.unit_prices[28], catalog.upgrade_prices[28], catalog.technology_prices[1001]) == (100, 50, 500)
+    assert catalog.card_effects[10010] == "officer"
+    candidates = candidate_actions(snapshot, 0, catalog, cards=[300001])
+    assert all((action.estimated_cost or 0) <= 250 for action in candidates)
+    # A Vulcan costs 400 to buy and 200 to upgrade: the upgrade stays, the purchase does not.
+    assert not [action for action in candidates if action.kind == "buy" and action.parameters["unitId"] == 3]
+    upgrade = next(action for action in candidates if action.kind == "upgrade")
+    assert upgrade.estimated_cost == 200
+    assert apply_action(snapshot, 0, upgrade).players[0].supply == 50
+
+
 def test_ranking_is_sorted_by_gain(tmp_path: Path) -> None:
     from mechabellum.datasets import write_snapshots
     from mechabellum.features import feature_names
@@ -64,6 +80,7 @@ def test_ranking_is_sorted_by_gain(tmp_path: Path) -> None:
         winner = index % 2
         data["outcome"] = {"winnerIndex": winner, "winnerPlayerId": None, "winnerName": None}
         data["players"][winner]["reactorCore"] += 300
+        data["players"][0]["supply"] = 1000
         snapshots.append(validate_snapshot(data))
     dataset = tmp_path / "dataset.jsonl"
     write_snapshots(dataset, snapshots)

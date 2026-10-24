@@ -60,6 +60,7 @@ ADVANCE_TEAM_NAMES: dict[int, str] = _table("advanceTeams")
 UNIT_CARD_NAMES: dict[int, str] = _table("unitCards")
 # Per unit: supply, unlockSupply, upgradeSupply and members (squad size); keys absent where the game has no price.
 UNIT_PRICES: dict[int, dict[str, int]] = _table("unitPrices")
+UNIT_TECHNOLOGIES: dict[int, list[int]] = _table("unitTechnologies")
 TECHNOLOGY_SUPPLY: dict[int, int] = _table("technologySupply")
 # Cards with a price of their own; the rest sell at their card level's price.
 CARD_SUPPLY: dict[int, int] = _table("cardSupply")

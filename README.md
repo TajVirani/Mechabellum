@@ -96,10 +96,16 @@ With the `deep` extra (`pip install -e ".[ml,deep]"`), train a token model over 
 .venv\Scripts\mecha train-deep --dataset data\match-snapshots.v2.jsonl --architecture transformer
 ```
 
-Rank candidate actions for one player of a position (buys, upgrades, technologies, moves, and offered cards) by how much the model thinks each improves their win probability. Unit prices and card effects are learned from the dataset; no fight is simulated, so this is the model's static judgement of the changed board:
+Rank candidate actions for one player of a position (buys, upgrades, technologies, moves, and offered cards) by how much the model thinks each improves their win probability. Prices, each unit's technologies and what each card grants come from the game's tables, and actions the player cannot afford are left out; `--dataset` fills in anything the tables lack from replays. No fight is simulated, so this is the model's static judgement of the changed board:
 
 ```powershell
-.venv\Scripts\mecha recommend --input position.json --player 1 --dataset data\match-snapshots.v2.jsonl --cards 13030005,20003
+.venv\Scripts\mecha recommend --input position.json --player 1 --cards 13030005,20003
+```
+
+The id-to-name and price tables in `src/mechabellum/collector/game_names.json` are generated from [qbisi/mechcore](https://github.com/qbisi/mechcore) and [mechstats/mech-data](https://github.com/mechstats/mech-data). Regenerate them when mechcore moves to a new game version:
+
+```powershell
+.venv\Scripts\python scripts\build_game_names.py
 ```
 
 Check a replay folder before training on it, real or generated: version index, duplicates, abnormal matches and distributions:

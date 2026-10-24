@@ -2,8 +2,9 @@
 
 There is no simulator: each candidate is applied to a copy of a fight_over position (the board the player
 deploys from) and the model scores the result. The ranking is therefore the model's static judgement of the
-changed board, not a played-out fight. Unit prices and card effects are learned from replays (see
-ActionCatalog), because no id-to-cost table is available yet.
+changed board, not a played-out fight. Prices, each unit's technologies and what a card grants come from the
+game's tables (collector/game_names.json); replays fill in what those tables lack (see ActionCatalog). Actions the
+player cannot afford are left out.
 """
 
 from __future__ import annotations
@@ -13,6 +14,19 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
+from ..collector.unit_catalog import (
+    CARD_SUPPLY,
+    COMMANDER_SKILL_NAMES,
+    EQUIPMENT_NAMES,
+    OFFICER_NAMES,
+    TECHNOLOGY_NAMES,
+    TECHNOLOGY_SUPPLY,
+    UNIT_PRICES,
+    UNIT_TECHNOLOGIES,
+    card_name,
+    technology_name,
+    unit_name,
+)
 from ..contracts import (
     CommanderSkill,
     EquipmentItem,
@@ -41,14 +55,39 @@ class CandidateAction:
 
 @dataclass
 class ActionCatalog:
-    """What replays reveal about actions: unit prices, technologies per unit, and what each card changes."""
+    """What actions cost and do: unit, upgrade, technology and card prices, technologies per unit, card effects."""
 
     unit_prices: dict[int, int] = field(default_factory=dict)
+    upgrade_prices: dict[int, int] = field(default_factory=dict)
+    technology_prices: dict[int, int] = field(default_factory=dict)
+    card_prices: dict[int, int] = field(default_factory=dict)
     unit_technologies: dict[int, list[int]] = field(default_factory=dict)
     card_effects: dict[int, CardEffect] = field(default_factory=dict)
 
     @classmethod
+    def from_game_data(cls) -> ActionCatalog:
+        effects: dict[int, CardEffect] = {}
+        for effect, table in (
+            ("technology", TECHNOLOGY_NAMES),
+            ("commander_skill", COMMANDER_SKILL_NAMES),
+            ("equipment", EQUIPMENT_NAMES),
+            ("officer", OFFICER_NAMES),
+        ):
+            effects.update(dict.fromkeys(table, effect))
+        return cls(
+            unit_prices={unit: price["supply"] for unit, price in UNIT_PRICES.items() if "supply" in price},
+            upgrade_prices={
+                unit: price["upgradeSupply"] for unit, price in UNIT_PRICES.items() if "upgradeSupply" in price
+            },
+            technology_prices=dict(TECHNOLOGY_SUPPLY),
+            card_prices=dict(CARD_SUPPLY),
+            unit_technologies={unit: list(ids) for unit, ids in UNIT_TECHNOLOGIES.items()},
+            card_effects=effects,
+        )
+
+    @classmethod
     def from_snapshots(cls, snapshots: Sequence[MatchSnapshot]) -> ActionCatalog:
+        """The game's tables, with what the replays show for units, technologies and cards the tables lack."""
         prices: dict[int, Counter[int]] = defaultdict(Counter)
         technologies: dict[int, set[int]] = defaultdict(set)
         effects: dict[int, Counter[str]] = defaultdict(Counter)
@@ -67,11 +106,15 @@ class ActionCatalog:
                 if choice is None or choice.item_id is None:
                     continue
                 effects[choice.item_id][_card_effect(before, after, choice.item_id)] += 1
-        return cls(
-            unit_prices={unit: counts.most_common(1)[0][0] for unit, counts in prices.items()},
-            unit_technologies={unit: sorted(values) for unit, values in technologies.items()},
-            card_effects={card: counts.most_common(1)[0][0] for card, counts in effects.items()},  # type: ignore[misc]
-        )
+        catalog = cls.from_game_data()
+        for unit, counts in prices.items():
+            catalog.unit_prices.setdefault(unit, counts.most_common(1)[0][0])
+        for unit, values in technologies.items():
+            known = catalog.unit_technologies.setdefault(unit, [])
+            known.extend(sorted(values - set(known)))
+        for card, counts in effects.items():
+            catalog.card_effects.setdefault(card, counts.most_common(1)[0][0])  # type: ignore[arg-type]
+        return catalog
 
 
 def _card_effect(before: PlayerSnapshot, after: PlayerSnapshot, card: int) -> str:
@@ -93,6 +136,7 @@ def _card_effect(before: PlayerSnapshot, after: PlayerSnapshot, card: int) -> st
 def candidate_actions(
     snapshot: MatchSnapshot, perspective: int, catalog: ActionCatalog, cards: Iterable[int] = ()
 ) -> list[CandidateAction]:
+    """Buys, upgrades, technologies, moves and offered cards, leaving out those the player's supply cannot pay for."""
     player = snapshot.players[perspective]
     actions: list[CandidateAction] = []
     for unit_id in player.unlocked_unit_ids or sorted({unit.unit_id for unit in player.units}):
@@ -100,14 +144,19 @@ def candidate_actions(
             actions.append(
                 CandidateAction(
                     "buy",
-                    f"Buy unit {unit_id} at lane x={x:+.0f}, depth {depth:.0f}",
+                    f"Buy {unit_name(unit_id)} at lane x={x:+.0f}, depth {depth:.0f}",
                     {"unitId": unit_id, "x": x, "depth": depth},
                     catalog.unit_prices.get(unit_id),
                 )
             )
     for index, unit in enumerate(player.units):
         actions.append(
-            CandidateAction("upgrade", f"Upgrade formation {index} (unit {unit.unit_id})", {"formation": index}, None)
+            CandidateAction(
+                "upgrade",
+                f"Upgrade formation {index} ({unit_name(unit.unit_id)})",
+                {"formation": index},
+                catalog.upgrade_prices.get(unit.unit_id),
+            )
         )
         for dx, ddepth, label in (
             (0, -MOVE_STEP, "forward"),
@@ -118,7 +167,7 @@ def candidate_actions(
             actions.append(
                 CandidateAction(
                     "move",
-                    f"Move formation {index} (unit {unit.unit_id}) {label}",
+                    f"Move formation {index} ({unit_name(unit.unit_id)}) {label}",
                     {"formation": index, "dx": dx, "ddepth": ddepth},
                     0,
                 )
@@ -131,15 +180,24 @@ def candidate_actions(
                 actions.append(
                     CandidateAction(
                         "technology",
-                        f"Research technology {technology} for unit {unit_id}",
+                        f"Research {technology_name(technology)} for {unit_name(unit_id)}",
                         {"unitId": unit_id, "technologyId": technology},
-                        None,
+                        catalog.technology_prices.get(technology),
                     )
                 )
     for card in cards:
         effect = catalog.card_effects.get(card, "unknown")
-        actions.append(CandidateAction("card", f"Pick card {card} ({effect})", {"itemId": card, "effect": effect}, 0))
-    return actions
+        actions.append(
+            CandidateAction(
+                "card",
+                f"Pick {card_name(card)} ({effect})",
+                {"itemId": card, "effect": effect},
+                catalog.card_prices.get(card),
+            )
+        )
+    if player.supply is None:
+        return actions
+    return [action for action in actions if (action.estimated_cost or 0) <= player.supply]
 
 
 def apply_action(snapshot: MatchSnapshot, perspective: int, action: CandidateAction) -> MatchSnapshot:
@@ -155,7 +213,7 @@ def apply_action(snapshot: MatchSnapshot, perspective: int, action: CandidateAct
         units.append(
             UnitDeployment(
                 unit_id=unit_id,
-                unit_name=str(unit_id),
+                unit_name=unit_name(unit_id),
                 formation_index=len(units),
                 raw_level=0,
                 display_level=1,
@@ -168,8 +226,6 @@ def apply_action(snapshot: MatchSnapshot, perspective: int, action: CandidateAct
                 equipment=[],
             )
         )
-        if action.estimated_cost:
-            update["supply"] = (player.supply or 0) - action.estimated_cost
     elif action.kind == "upgrade":
         unit = units[parameters["formation"]]
         units[parameters["formation"]] = unit.model_copy(
@@ -185,7 +241,9 @@ def apply_action(snapshot: MatchSnapshot, perspective: int, action: CandidateAct
         unit_id, technology = parameters["unitId"], parameters["technologyId"]
         existing = next((item for item in technologies if item.unit_id == unit_id), None)
         if existing is None:
-            technologies.append(UnitTechnologySet(unit_id=unit_id, unit_name=str(unit_id), technology_ids=[technology]))
+            technologies.append(
+                UnitTechnologySet(unit_id=unit_id, unit_name=unit_name(unit_id), technology_ids=[technology])
+            )
         else:
             technologies[technologies.index(existing)] = existing.model_copy(
                 update={"technology_ids": [*existing.technology_ids, technology]}
@@ -208,6 +266,8 @@ def apply_action(snapshot: MatchSnapshot, perspective: int, action: CandidateAct
                     skill_id=card, slot_index=len(skills), acquired_round=None, cooldown_rounds=0, is_active=True
                 ),
             ]
+    if action.estimated_cost:
+        update["supply"] = (player.supply or 0) - action.estimated_cost
     update["units"] = units
     update["active_technologies"] = technologies
     players = list(snapshot.players)

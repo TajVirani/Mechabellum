@@ -134,8 +134,7 @@ def _parser() -> argparse.ArgumentParser:
     recommend.add_argument(
         "--dataset",
         type=Path,
-        required=True,
-        help="Replay dataset the unit prices, technologies and card effects are learned from.",
+        help="Replay dataset that fills in prices, technologies and card effects the game's tables lack.",
     )
     recommend.add_argument("--model", type=Path, default=Path("artifacts/win_model.joblib"))
     recommend.add_argument(
@@ -391,7 +390,11 @@ def _recommend(args: argparse.Namespace) -> None:
 
     data = json.load(sys.stdin) if args.input is None else json.loads(args.input.read_text(encoding="utf-8-sig"))
     snapshot = validate_snapshot(data)
-    catalog = ActionCatalog.from_snapshots(load_training_snapshots(args.dataset))
+    catalog = (
+        ActionCatalog.from_game_data()
+        if args.dataset is None
+        else ActionCatalog.from_snapshots(load_training_snapshots(args.dataset))
+    )
     artifact = load_artifact(args.model, feature_names())
     candidates = candidate_actions(snapshot, args.player, catalog, args.cards)
     baseline, ranked = rank_actions(artifact, snapshot, args.player, candidates, args.round_weight)
