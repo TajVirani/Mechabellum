@@ -78,11 +78,12 @@ def test_catch_up_order_with_a_match() -> None:
 
 def test_subscriber_gets_catch_up_then_incremental_events() -> None:
     state = hub()
-    state.set_summaries([summary("b1", "me", "x")])
+    # "me" is the clear suggestion already, so the upsert below doesn't change it (and sends no `config`).
+    state.set_summaries([summary("b1", "me", "x"), summary("b0", "me", "z")])
     client = state.subscribe()
     events = drain(client)
     assert [name for name, _ in events] == CATCH_UP
-    assert events[1][1] == {"rows": [summary("b1", "me", "x")]}
+    assert events[1][1] == {"rows": [summary("b0", "me", "z"), summary("b1", "me", "x")]}
 
     state.upsert_summary(summary("b2", "me", "y"))
     state.add_rating("b2", "me", 1500)
@@ -154,3 +155,31 @@ def test_a_stalled_client_is_dropped_with_only_the_close_marker_left() -> None:
     # A reconnecting client starts again from a fresh catch-up.
     fresh = state.subscribe()
     assert [name for name, _ in drain(fresh)] == CATCH_UP
+
+
+def test_indexing_progress_and_the_changing_suggestion_are_streamed() -> None:
+    state = hub()
+    assert dict(state.catch_up())["status"]["indexing"] == {"done": 0, "total": None}
+    assert dict(hub(replay_dir=None).catch_up())["status"]["indexing"] is None
+    client = state.subscribe()
+    drain(client)
+
+    state.indexed([summary("b1", "me", "x"), summary("b2", "me", "y")], 2, 4, replace=True)
+    events = drain(client)
+    assert [name for name, _ in events] == ["summaries", "baseline", "config", "status"]
+    assert events[2][1] == {"localPlayerId": None, "suggestedPlayerId": "me"}
+    assert events[3][1]["indexing"] == {"done": 2, "total": 4}
+
+    # Newly parsed rows are upserts, never a full resend; an unchanged suggestion sends no `config`.
+    state.indexed([summary("b3", "me", "z")], 3, 4)
+    assert [name for name, _ in drain(client)] == ["summary", "baseline", "status"]
+    state.indexed([summary("b4", "a", "b"), summary("b5", "a", "c"), summary("b6", "a", "d")], 4, 4)
+    events = drain(client)
+    assert [name for name, _ in events] == ["summary", "summary", "summary", "baseline", "config", "status"]
+    assert events[4][1]["suggestedPlayerId"] is None
+    state.indexed([], 4, 4)
+    assert [name for name, _ in drain(client)] == ["status"]
+    catch_up = dict(state.catch_up())
+    assert len(catch_up["summaries"]["rows"]) == 6
+    assert catch_up["hello"]["suggestedPlayerId"] is None
+    assert catch_up["status"]["indexing"] == {"done": 4, "total": 4}

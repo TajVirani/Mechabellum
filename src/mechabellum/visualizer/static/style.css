@@ -210,6 +210,22 @@ input {
   color: var(--icon-line);
 }
 
+.meta-chip.indexing {
+  color: var(--accent-hud);
+  font-variant-numeric: tabular-nums;
+}
+
+.meta-chip.indexing::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  vertical-align: 1px;
+  background: currentColor;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
 /* ---------- views ---------- */
 .view {
   display: grid;

@@ -2,7 +2,7 @@
 // text field. Saving POSTs to /api/local-player on localhost; the store only changes when the server's `config`
 // event comes back over SSE.
 import { observe } from "../vendor/legend-state.mjs";
-import { store, ui } from "../store.js";
+import { store, ui, isIndexing } from "../store.js";
 import { h, panelShell, replace } from "../ui.js";
 
 export async function setLocalPlayer(playerId) {
@@ -63,6 +63,20 @@ export function mount(container) {
   );
   replace(p.body, h("p", null, "The Stats view counts the matches you played. Pick your player id; it stays the same when you rename."), suggestion, form, status);
 
+  // The suggestion is built once too and only its text changes: rows stream in while the replay folder is indexed,
+  // and a click must never land on a button that was just replaced.
+  let suggested = null;
+  const suggestName = h("div", { class: "suggest-name" });
+  const suggestId = h("div", { class: "suggest-id" });
+  const suggestCard = h(
+    "div",
+    { class: "suggestion" },
+    h("div", null, suggestName, suggestId),
+    h("button", { type: "button", class: "btn primary", "data-action": "use-suggested", onclick: () => save(suggested) }, "That's me"),
+  );
+  const noSuggestion = h("p", { class: "muted" });
+  suggestion.append(suggestCard, noSuggestion);
+
   let wasShown = false;
   observe(() => {
     const hello = store.hello.get();
@@ -83,23 +97,15 @@ export function mount(container) {
     }
     wasShown = true;
     cancel.hidden = !id;
-    const suggested = hello.suggestedPlayerId;
-    replace(
-      suggestion,
-      suggested
-        ? h(
-            "div",
-            { class: "suggestion" },
-            h(
-              "div",
-              null,
-              h("div", { class: "suggest-name" }, lastNameOf(summaries, suggested) || "Unknown name"),
-              h("div", { class: "suggest-id" }, `${suggested} · in ${countOf(summaries, suggested)} of ${summaries.length} replays`),
-            ),
-            h("button", { type: "button", class: "btn primary", "data-action": "use-suggested", onclick: () => save(suggested) }, "That's me"),
-          )
-        : h("p", { class: "muted" }, "No player appears in most of your replays, so there's no suggestion."),
-    );
+    suggested = hello.suggestedPlayerId;
+    suggestCard.hidden = !suggested;
+    noSuggestion.hidden = !!suggested;
+    if (suggested) {
+      suggestName.textContent = lastNameOf(summaries, suggested) || "Unknown name";
+      suggestId.textContent = `${suggested} · in ${countOf(summaries, suggested)} of ${summaries.length} replays`;
+    } else {
+      noSuggestion.textContent = isIndexing(store.status.get()) ? "Reading your replays to suggest an id…" : "No player appears in most of your replays, so there's no suggestion.";
+    }
     p.setState("ready");
   });
 }

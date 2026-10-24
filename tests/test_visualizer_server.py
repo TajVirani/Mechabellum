@@ -35,6 +35,7 @@ def server(tmp_path: Path) -> Iterator[Visualizer]:
     )
     visualizer = Visualizer(options, static_dir=static)
     visualizer.start()
+    assert visualizer.wait_until_indexed(timeout=60)
     assert visualizer.wait_until_live_done(timeout=60)
     yield visualizer
     visualizer.close()
@@ -80,9 +81,11 @@ def test_events_send_the_full_catch_up(server: Visualizer) -> None:
         "20261023--67519030",
         "20261024--67160210",
     ]
-    assert data["baseline"]["byRound"]["1"]["n"] == 3
+    assert list(data["baseline"]["byMode"]) == ["Normal"]
+    assert data["baseline"]["byMode"]["Normal"]["byRound"]["1"]["n"] == 3
     assert data["ratings"]["byBattle"]["20261024--67159493"][LOCAL_PLAYER] == 1651
     assert data["status"]["state"] == "playback_done"
+    assert data["status"]["indexing"] == {"done": 4, "total": 4}
     assert data["frame"]["localIndex"] == 0
     assert data["frame"]["snapshot"]["match"]["round"] == 10
     assert data["predictions"] == {"battleId": "20261024--67159493", "rows": []}
@@ -185,3 +188,65 @@ def test_close_joins_the_worker_threads(tmp_path: Path) -> None:
     assert visualizer.watcher is not None and visualizer.watcher._thread is not None
     assert not visualizer.watcher._thread.is_alive()
     assert all(not thread.is_alive() for thread in visualizer._threads if thread.name != "http")
+
+
+def test_serves_before_the_replay_folder_is_indexed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A cold cache doesn't hold up the server: summaries arrive over the stream as they are parsed."""
+    import threading
+
+    from mechabellum.visualizer import watcher as watcher_module
+
+    release = threading.Event()
+    real = watcher_module.summarize_replay
+
+    def slow(path: Path, root: Path | None = None) -> dict:
+        assert release.wait(30)
+        return real(path, root)
+
+    monkeypatch.setattr(watcher_module, "summarize_replay", slow)
+    options = VisualizerOptions(
+        port=0,
+        open_browser=False,
+        replay_dir=FIXTURES / "replays",
+        data_dir=tmp_path / "data",
+        live=False,
+        model=tmp_path / "missing.joblib",
+    )
+    visualizer = Visualizer(options)
+    try:
+        visualizer.start()
+        assert not visualizer.wait_until_indexed(timeout=0.2)
+        with urllib.request.urlopen(visualizer.url + "events", timeout=10) as response:
+            events = []
+            name = None
+            while len(events) < 5:
+                line = response.readline().decode("utf-8")
+                if line.startswith("event: "):
+                    name = line[len("event: ") :].strip()
+                elif line.startswith("data: "):
+                    events.append((name, json.loads(line[len("data: ") :])))
+            assert [name for name, _ in events] == ["hello", "summaries", "baseline", "ratings", "status"]
+            data = dict(events)
+            assert data["summaries"]["rows"] == []
+            assert data["hello"]["suggestedPlayerId"] is None
+            assert data["status"]["indexing"]["done"] == 0
+            release.set()
+            later: list[tuple[str, dict]] = []
+            while not later or later[-1][0] != "status" or later[-1][1]["indexing"]["done"] < 4:
+                line = response.readline().decode("utf-8")
+                if line.startswith("event: "):
+                    name = line[len("event: ") :].strip()
+                elif line.startswith("data: "):
+                    later.append((name, json.loads(line[len("data: ") :])))
+        names = [name for name, _ in later]
+        assert "summaries" not in names
+        assert names.count("summary") == 3
+        assert {"baseline", "status"} <= set(names)
+        # The suggested player follows the rows as they arrive.
+        configs = [data for name, data in later if name == "config"]
+        assert configs and configs[-1] == {"localPlayerId": None, "suggestedPlayerId": LOCAL_PLAYER}
+        assert later[-1][1]["indexing"] == {"done": 4, "total": 4}
+        assert visualizer.wait_until_indexed(timeout=10)
+    finally:
+        release.set()
+        visualizer.close()

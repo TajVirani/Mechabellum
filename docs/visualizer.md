@@ -22,7 +22,7 @@ mecha visualize [--port 8765] [--no-browser] [--replay-dir DIR] [--data-dir DIR]
 - **`--playback FILE`**: replays a `mecha live-record` JSONL file as the live source instead of reading memory, paced by the frames' `capturedAtUtc` divided by `--playback-speed`. `0` means as fast as possible, and the view keeps the final state. Used for development, tests and demos.
 - **`--no-live`**: no live source at all (Stats view only).
 - **`--model`**: without the `ml` extra or the artifact, the server still runs and the win-probability panel shows "model unavailable".
-- Binds `127.0.0.1` only. It prints the URL, then opens the browser unless `--no-browser` is given.
+- Binds `127.0.0.1` only. It prints the URL, then opens the browser unless `--no-browser` is given. The URL comes out at once: the replay folder is indexed in the background (see **Indexing**).
 - `Taskfile.yml` at the repo root wraps it: `task visualize`, `task visualize:playback FILE=…`, `task vendor`, `task test`, `task test:e2e`.
 
 ## Package
@@ -35,10 +35,10 @@ mecha visualize [--port 8765] [--no-browser] [--replay-dir DIR] [--data-dir DIR]
 | `hub.py` | Current state plus fan-out to SSE clients; catch-up on connect |
 | `summaries.py` | Replay → Match Summary, the `SUMMARY_VERSION` constant |
 | `cache.py` | sqlite cache of summaries and captured ratings |
-| `watcher.py` | Polls the replay folder every ~2 s; a file is parsed once its size is unchanged over two polls |
+| `watcher.py` | Indexes the replay folder at start-up (on its own thread), then polls it every ~2 s; a file is parsed once its size is unchanged over two polls |
 | `live.py` | Live source thread (memory or playback): retry, prediction at fight end, rating capture, Local Player detection, status |
 | `roles.py` + `unit_roles.json` | The unit → role table, plus composition maths |
-| `baseline.py` | Winning-board role baseline by round and overall |
+| `baseline.py` | Winning-board role baseline per game mode, by round and overall |
 | `bridge_status.py` | Optional MechaBridge `StatusRequest` probe (game version, online). Silently absent when the `bridge` extra isn't installed or the mod isn't running |
 | `static/` | `index.html`, `app.js`, `store.js`, `panels/*.js`, `style.css`, `vendor/` |
 
@@ -89,11 +89,11 @@ One per replay, built server-side, cached by (path, size, mtime, `SUMMARY_CACHE_
 
 ### Baseline
 
-Average composition of **winning** boards over every summary (all players, not only the Local Player):
+Average composition of **winning** boards over every summary (all players, not only the Local Player), kept **per game mode** (`gameMode`; a summary without one counts as `Normal`). Modes never mix: AsyncBattle's unit ids aren't in the role table, so mixing them in would make a large share of every board "unknown". For each mode:
 - **by round:** `byRound[r]` is the mean of the winners' round-`r` compositions, with `n`.
 - **overall:** the mean over all winner round-compositions.
 
-It's recomputed whenever summaries change. Rounds with `n < 5` are flagged `thin`.
+`byMode` always holds `Normal` (empty when no summary is Normal), plus every other mode that appears. It's recomputed whenever summaries change. Rounds with `n < 5` are flagged `thin`.
 
 ### Ratings
 
@@ -102,9 +102,18 @@ Replays have no rating. While a live source runs, the first non-null `rating` se
 ### Local Player
 
 `localPlayerId` comes from config.
-- **Suggestion:** the `playerId` in the most summaries, if it's in ≥60% of them. Sent as `suggestedPlayerId`.
+- **Suggestion:** the `playerId` in the most summaries, if it's in ≥60% of them. Sent as `suggestedPlayerId` in `hello`, and again in `config` whenever it changes (as rows arrive during indexing, or as replays come and go).
 - **Live:** if no id is set and a live frame's `player_id` matches the suggestion, the live view uses that player but doesn't persist the id.
 - **Setting the id:** the browser can set it with `POST /api/local-player {"playerId": "…"}` (to localhost only, never to the game), or by hand on the CLI.
+
+### Indexing
+
+`mecha visualize` binds and prints its URL before reading any replay. The watcher thread then scans the folder once:
+1. It stats every replay and looks each one up in the cache. The cached summaries go out together, as one `summaries` event.
+2. It parses the rest one by one (replays directly in the folder before version subfolders, which can hold thousands of fetched tournament replays; newest first within each), sending the new rows as `summary` upserts in batches (at most every ~0.5 s, and once at the end), each batch followed by one `baseline`.
+3. After each step, `status.indexing` carries the progress `{done, total}`: files handled (cached, parsed or skipped) out of all files.
+
+Polling starts once the scan is done. A cold first run over a thousand replays takes over a minute to index, but the page is usable at once and the Stats panels fill in as rows arrive.
 
 ## SSE events (`GET /events`)
 
@@ -115,14 +124,14 @@ Each event is `event: <name>` plus `data: <json>`. On connect, the server sends 
 | `hello` | `{serverVersion, localPlayerId, suggestedPlayerId, modelAvailable, replayDir, liveSource: "memory" \| "playback" \| "none"}` |
 | `summaries` | `{rows: [MatchSummary]}`: the full set. Also resent whenever a summary goes away (its replay was deleted, or now is skipped); the browser replaces its rows |
 | `summary` | `{row: MatchSummary}`: upsert by `battleId` |
-| `baseline` | `{byRound: {"1": {roles, air, hitsAir, bodies, n, thin}, …}, overall: {…}}` |
+| `baseline` | `{byMode: {"Normal": {byRound: {"1": {roles, air, hitsAir, bodies, n, thin}, …}, overall: {…}}, "AsyncBattle": {…}}}` |
 | `ratings` | `{byBattle: {battleId: {playerId: rating}}}`: full |
 | `rating` | `{battleId, playerId, rating}` |
 | `frame` | `{snapshot: <MatchSnapshot v2 JSON>, localIndex: 0 \| 1 \| null, composition: [<composition per player>], boardAsOfLastFight: [bool, bool]}` |
 | `predictions` | `{battleId, rows: [{round, leftWinProbability, swing}]}`: full for the current match. "Left" is the Local Player, or player 0 when spectating |
 | `prediction` | `{battleId, round, leftWinProbability, swing}` |
-| `status` | `{state: "waiting" \| "live" \| "retrying" \| "no_game" \| "layout_mismatch" \| "playback_done" \| "off", detail, gameVersion, bridge: "online" \| "offline" \| "absent"}` |
-| `config` | `{localPlayerId}` |
+| `status` | `{state: "waiting" \| "live" \| "retrying" \| "no_game" \| "layout_mismatch" \| "playback_done" \| "off", detail, gameVersion, bridge: "online" \| "offline" \| "absent", indexing: {done, total} \| null}`. `indexing` is the start-up scan's progress (`total` is null until the files are counted; `done == total` once finished) and null without a replay folder. Sent after each indexing batch |
+| `config` | `{localPlayerId, suggestedPlayerId}`: sent when the Local Player is set and whenever the suggestion changes |
 
 **Slow clients:** each client's queue holds at most ~256 pending events. A client that falls further behind is dropped; its stream ends and the browser reconnects to a fresh catch-up.
 
@@ -137,7 +146,8 @@ Built in the browser from `summaries`, `ratings` and `localPlayerId`.
 - **Which matches count:** summaries containing `localPlayerId`. Until an id is set, a setup card offers the suggested id (with the name it last played under) and a text field.
 - **Filters** (global, applying to every panel): mode (All / Normal / Async), game version (multi-select, default all) and date range (whole days).
 - **Win rates** always show n. Rows with n < 5 are dimmed.
-- **Updates:** a new `summary` recomputes every panel, and the new row slides into Recent matches with a brief highlight.
+- **Updates:** a new `summary` recomputes every panel, and the new row slides into Recent matches with a brief highlight (not for rows arriving during indexing).
+- **Indexing:** while `status.indexing` shows the scan running, the top bar shows a small "Indexing replays 12/66" chip, and the panels fill in as rows arrive. The setup card's suggestion follows `config`.
 
 The seven panels:
 1. **Record:** games, W–L, win rate, current streak.
@@ -161,8 +171,8 @@ The view opens on Stats and auto-switches to Current Match when a match goes liv
 2. **Win probability** (ECharts): the left player's probability per round, with a 50% midline and swing markers sized by `|swing|`. Shows "model unavailable" when `modelAvailable` is false.
 3. **Board composition by role:**
    - For each player, a horizontal stacked bar of role shares, with Air and Hits-air percentages and bodies.
-   - Beside it, the baseline bar for the same round, marked "thin" when `n < 5`.
-   - A toggle switches between **This round** and **Whole match**. Whole match means the mean of this match's compositions so far, against `baseline.overall`.
+   - Beside it, the baseline bar for the same round, marked "thin" when `n < 5`. The baseline is the one for the live match's `gameMode` (`baseline.byMode[gameMode]`), falling back to `Normal`; its tag names the mode.
+   - A toggle switches between **This round** and **Whole match**. Whole match means the mean of this match's compositions so far, against that mode's `overall`.
    - Below, a per-round line chart of the left player's role shares, with the baseline as dashed lines.
 4. **Army value and HP:** per-round lines for both players, from the frames at each fight's end.
 5. **Boards:** each player's units grouped by type, with count, level and a role-coloured chip. Marked "as of last fight" when `boardAsOfLastFight`.
@@ -206,3 +216,7 @@ Plain HTML, CSS and ES modules, with no build step (ADR 0001):
 - **Fixtures:**
   - A few small real 1v1 replays from the Local Player's folder.
   - A down-sampled copy of a real `live-record` recording: every phase change plus the first `fight_over` per round, a few hundred KB at most.
+
+## Open items
+
+- AsyncBattle unit ids (50xx) may be 5000 + the base unit id; unverified, so they stay "unknown" in `unit_roles.json`.

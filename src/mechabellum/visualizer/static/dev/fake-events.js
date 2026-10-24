@@ -131,7 +131,7 @@ function baseline() {
     byRound[String(r)] = { roles: c.roles, air: c.air, hitsAir: c.hitsAir, bodies: c.bodies, n: r > 9 ? 3 : 40 - r * 3, thin: r > 9 };
   }
   const o = composition(0);
-  return { byRound, overall: { roles: o.roles, air: o.air, hitsAir: o.hitsAir, bodies: o.bodies, n: 260, thin: false } };
+  return { byMode: { Normal: { byRound, overall: { roles: o.roles, air: o.air, hitsAir: o.hitsAir, bodies: o.bodies, n: 260, thin: false } } } };
 }
 
 function catchUp() {
@@ -151,7 +151,7 @@ function catchUp() {
   applyEvent("summaries", { rows });
   applyEvent("baseline", baseline());
   applyEvent("ratings", { byBattle: ratings });
-  applyEvent("status", { state: params.get("status") || "live", detail: null, gameVersion: "2.0.0.5", bridge: "online" });
+  applyEvent("status", { state: params.get("status") || "live", detail: null, gameVersion: "2.0.0.5", bridge: "online", indexing: params.has("indexing") ? { done: 12, total: 66 } : { done: 64, total: 64 } });
   // Earlier rounds' fight ends, then the current deploying frame.
   for (let r = 1; r <= 5; r++) {
     applyEvent("frame", frame(r, "fight_over"));

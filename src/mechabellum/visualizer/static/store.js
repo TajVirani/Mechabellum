@@ -11,12 +11,13 @@ function initialState(connection = "connecting") {
   return {
     connection, // "connecting" | "open" | "lost"
     hello: null, // {serverVersion, localPlayerId, suggestedPlayerId, modelAvailable, replayDir, liveSource}
+    //   (`config` keeps suggestedPlayerId current, so the store matches a fresh catch-up)
     localPlayerId: null,
     summaries: [], // MatchSummary rows, oldest first
     lastSummaryId: null, // battleId of the latest incremental `summary` upsert (for the Recent highlight)
-    baseline: null, // {byRound: {"1": {...}}, overall: {...}}
+    baseline: null, // {byMode: {"Normal": {byRound: {"1": {...}}, overall: {...}}, "AsyncBattle": {...}}}
     ratings: {}, // {battleId: {playerId: rating}}
-    status: null, // {state, detail, gameVersion, bridge}
+    status: null, // {state, detail, gameVersion, bridge, indexing: {done, total} | null}
     frame: null, // {snapshot, localIndex, composition, boardAsOfLastFight}
     match: null, // per-round history of the current match, built from frames: {battleId, rounds: {r: {...}}}
     predictions: { battleId: null, rows: [] },
@@ -44,6 +45,19 @@ export function compareBattleIds(a, b) {
   const [da, ta] = battleKey(a);
   const [db, tb] = battleKey(b);
   return da < db ? -1 : da > db ? 1 : ta - tb;
+}
+
+// True while the server's start-up scan of the replay folder is still running.
+export function isIndexing(status) {
+  const ix = status?.indexing;
+  return !!ix && (ix.total == null || ix.done < ix.total);
+}
+
+// The winning-board baseline for a game mode, falling back to Normal's: {mode, byRound, overall} or null.
+export function baselineFor(baseline, gameMode) {
+  const byMode = baseline?.byMode || {};
+  const mode = gameMode && byMode[gameMode] ? gameMode : "Normal";
+  return byMode[mode] ? { mode, ...byMode[mode] } : null;
 }
 
 function sortRows(rows) {
@@ -126,7 +140,8 @@ export function applyEvent(type, data) {
         const rows = store.summaries.peek().filter((r) => r.battleId !== row.battleId);
         rows.push(row);
         store.summaries.set(sortRows(rows));
-        store.lastSummaryId.set(row.battleId);
+        // Rows arriving during the start-up scan aren't news; only a replay saved later gets the highlight.
+        if (!isIndexing(store.status.peek())) store.lastSummaryId.set(row.battleId);
         break;
       }
       case "baseline":
@@ -163,6 +178,10 @@ export function applyEvent(type, data) {
       }
       case "config":
         store.localPlayerId.set(data.localPlayerId ?? null);
+        if (store.hello.peek()) {
+          store.hello.localPlayerId.set(data.localPlayerId ?? null);
+          if ("suggestedPlayerId" in data) store.hello.suggestedPlayerId.set(data.suggestedPlayerId ?? null);
+        }
         break;
       default:
         break;

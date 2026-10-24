@@ -1,7 +1,7 @@
 // The Visualizer app: builds the layout, mounts the panels, connects to /events (auto-reconnecting) and switches
 // tabs. It opens on Stats and auto-switches to Current Match when a match goes live.
 import { observe } from "./vendor/legend-state.mjs";
-import { store, ui, applyEvent, setConnection, EVENT_TYPES } from "./store.js";
+import { store, ui, applyEvent, setConnection, isIndexing, EVENT_TYPES } from "./store.js";
 import { h } from "./ui.js";
 import { loadCatalog } from "./roles.js";
 
@@ -97,6 +97,11 @@ function bindViews(layout) {
     const hello = store.hello.get();
     const connection = store.connection.get();
     const bits = [];
+    // The start-up scan of the replay folder: the Stats panels fill in as it goes.
+    if (isIndexing(s)) {
+      const { done, total } = s.indexing;
+      bits.push(h("span", { class: "meta-chip indexing", "data-indexing": "active", title: "Reading new replays; the Stats view fills in as they arrive." }, total == null ? "Indexing replays…" : `Indexing replays ${done}/${total}`));
+    }
     const version = s?.gameVersion;
     if (version) bits.push(h("span", { class: "meta-chip" }, `Game ${version}`));
     if (s?.bridge && s.bridge !== "absent") bits.push(h("span", { class: `meta-chip bridge-${s.bridge}` }, `Bridge ${s.bridge}`));

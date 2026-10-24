@@ -70,7 +70,9 @@ def test_mean_composition_skips_empty_boards() -> None:
     assert mean["bodies"] == pytest.approx((24 + 1) / 2)
 
 
-def _summary(winner_rounds: list[list[UnitDeployment]], loser_rounds: list[list[UnitDeployment]]) -> dict:
+def _summary(
+    winner_rounds: list[list[UnitDeployment]], loser_rounds: list[list[UnitDeployment]], mode: str = "Normal"
+) -> dict:
     def player(won: bool, rounds: list[list[UnitDeployment]]) -> dict:
         return {
             "playerId": "w" if won else "l",
@@ -78,13 +80,13 @@ def _summary(winner_rounds: list[list[UnitDeployment]], loser_rounds: list[list[
             "composition": [board_composition(board, index + 1) for index, board in enumerate(rounds)],
         }
 
-    return {"players": [player(True, winner_rounds), player(False, loser_rounds)]}
+    return {"gameMode": mode, "players": [player(True, winner_rounds), player(False, loser_rounds)]}
 
 
 def test_baseline_averages_winning_boards_by_round_and_overall() -> None:
     chaff, tank = [unit(10, 100)], [unit(1, 400)]
     summaries = [_summary([chaff, tank], [tank, tank]) for _ in range(5)] + [_summary([tank], [chaff])]
-    baseline = compute_baseline(summaries)
+    baseline = compute_baseline(summaries)["byMode"]["Normal"]
 
     first, second = baseline["byRound"]["1"], baseline["byRound"]["2"]
     assert first["n"] == 6 and first["thin"] is False
@@ -98,9 +100,12 @@ def test_baseline_averages_winning_boards_by_round_and_overall() -> None:
 
 
 def test_baseline_flags_thin_rounds() -> None:
-    baseline = compute_baseline([_summary([[unit(10, 100)]], []) for _ in range(4)])
+    baseline = compute_baseline([_summary([[unit(10, 100)]], []) for _ in range(4)])["byMode"]["Normal"]
     assert baseline["byRound"]["1"]["thin"] is True
-    assert compute_baseline([])["overall"] == {
+    # Normal is always there, empty when no summary has it.
+    assert list(compute_baseline([])["byMode"]) == ["Normal"]
+    assert compute_baseline([])["byMode"]["Normal"]["byRound"] == {}
+    assert compute_baseline([])["byMode"]["Normal"]["overall"] == {
         "roles": dict.fromkeys(SLICES, 0.0),
         "air": 0.0,
         "hitsAir": 0.0,
@@ -108,3 +113,16 @@ def test_baseline_flags_thin_rounds() -> None:
         "n": 0,
         "thin": True,
     }
+
+
+def test_baseline_keeps_game_modes_apart() -> None:
+    chaff, tank = [unit(10, 100)], [unit(1, 400)]
+    # AsyncBattle's unit ids aren't in the role table: its boards are all "unknown", and must not dilute Normal's.
+    async_board = [unit(5010, 100)]
+    summaries = [_summary([chaff], [tank]), _summary([async_board], [tank], "AsyncBattle"), {"players": []}]
+    by_mode = compute_baseline(summaries)["byMode"]
+    assert set(by_mode) == {"Normal", "AsyncBattle"}
+    assert by_mode["Normal"]["overall"]["n"] == 1
+    assert by_mode["Normal"]["overall"]["roles"]["unknown"] == 0
+    assert by_mode["Normal"]["byRound"]["1"]["roles"]["chaff"] == pytest.approx(1.0)
+    assert by_mode["AsyncBattle"]["overall"]["roles"]["unknown"] == pytest.approx(1.0)

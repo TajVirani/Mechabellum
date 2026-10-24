@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 import threading
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -13,6 +14,11 @@ from .summaries import SkippedReplay, summarize_replay
 
 POLL_SECONDS = 2.0
 REPLAY_PATTERN = "*.grbr"
+# During the start-up scan, newly parsed summaries go out at most this often (and once at the end).
+INDEX_BATCH_SECONDS = 0.5
+
+# on_indexed(rows, done, total, replace): the cached rows first (replace=True), then batches of newly parsed ones.
+IndexCallback = Callable[[list[dict[str, Any]], int, int, bool], None]
 
 
 def replay_paths(replay_dir: Path) -> list[Path]:
@@ -23,10 +29,11 @@ def replay_paths(replay_dir: Path) -> list[Path]:
 class ReplayWatcher:
     """Summarises the replays in `replay_dir`, through the cache.
 
-    `scan_existing` reads what is there at start-up. After that, `poll` runs every ~2 s: a new or changed file is
-    parsed once its size and mtime are unchanged over two polls, so a replay the game is still writing is left
-    alone. Each new summary goes to `on_summary`. When a summary goes away (its replay was deleted, or now is
-    skipped), the whole remaining set goes to `on_summaries` instead.
+    `scan_existing` reads what is there at start-up; `start` runs it on the watcher thread first (reporting to
+    `on_indexed`) unless it already ran, so the server can serve while a cold cache is filled. After that, `poll`
+    runs every ~2 s: a new or changed file is parsed once its size and mtime are unchanged over two polls, so a
+    replay the game is still writing is left alone. Each new summary goes to `on_summary`. When a summary goes
+    away (its replay was deleted, or now is skipped), the whole remaining set goes to `on_summaries` instead.
     """
 
     def __init__(
@@ -36,12 +43,16 @@ class ReplayWatcher:
         on_summary: Callable[[dict[str, Any]], None],
         *,
         on_summaries: Callable[[list[dict[str, Any]]], None] | None = None,
+        on_indexed: IndexCallback | None = None,
         interval_seconds: float = POLL_SECONDS,
     ) -> None:
         self._dir = replay_dir
         self._cache = cache
         self._on_summary = on_summary
         self._on_summaries = on_summaries
+        self._on_indexed = on_indexed
+        # Set once the start-up scan has finished (or failed); polls only start after it.
+        self.indexed = threading.Event()
         # The current summary of every known replay that makes one.
         self._summaries: dict[Path, dict[str, Any]] = {}
         self._interval = interval_seconds
@@ -50,16 +61,49 @@ class ReplayWatcher:
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
-    def scan_existing(self) -> list[dict[str, Any]]:
-        """Summaries of every replay present now, parsing only those the cache doesn't hold."""
-        summaries = []
-        for path, state in self._states().items():
-            self._known[path] = state
-            summary = self._summarize(path, state)
-            if summary is not None:
-                self._summaries[path] = summary
-                summaries.append(summary)
-        return summaries
+    def scan_existing(self, on_indexed: IndexCallback | None = None) -> list[dict[str, Any]]:
+        """Summaries of every replay present now, parsing only those the cache doesn't hold.
+
+        With `on_indexed`, the cached summaries are reported first in one call, then the parsed ones in batches,
+        each with the scan's progress (files done, files total). A stop request ends the scan early.
+        """
+        try:
+            states = self._states()
+            total = len(states)
+            todo: list[tuple[Path, tuple[int, int]]] = []
+            cached_rows = []
+            for path, state in states.items():
+                cached = self._cache.lookup(path, *state)
+                if cached is None:
+                    todo.append((path, state))
+                    continue
+                self._known[path] = state
+                if cached.summary is not None:
+                    self._summaries[path] = cached.summary
+                    cached_rows.append(cached.summary)
+            # The Local Player's own replays (directly in the folder) first, newest first: version subfolders can
+            # hold thousands of fetched tournament replays that would otherwise keep the Stats view empty for minutes.
+            todo.sort(key=lambda item: (item[0].parent != self._dir, -item[1][1]))
+            done = total - len(todo)
+            if on_indexed is not None:
+                on_indexed(cached_rows, done, total, True)
+            batch: list[dict[str, Any]] = []
+            flushed = time.monotonic()
+            for path, state in todo:
+                if self._stop.is_set():
+                    break
+                summary = self._summarize(path, state)
+                self._known[path] = state
+                done += 1
+                if summary is not None:
+                    self._summaries[path] = summary
+                    batch.append(summary)
+                if on_indexed is not None and (done == total or time.monotonic() - flushed >= INDEX_BATCH_SECONDS):
+                    on_indexed(batch, done, total, False)
+                    batch, flushed = [], time.monotonic()
+            return [self._summaries[path] for path in states if path in self._summaries]
+        finally:
+            self.indexed.set()
 
     def summaries(self) -> list[dict[str, Any]]:
         return list(self._summaries.values())
@@ -113,6 +157,15 @@ class ReplayWatcher:
             self._thread.join(timeout)
 
     def _run(self) -> None:
+        if not self.indexed.is_set():
+            try:
+                self.scan_existing(self._on_indexed)
+            except Exception as error:
+                # Files the scan never reached are picked up by the polls, as if they were new.
+                print(f"Visualizer: replay scan failed: {error!r}", file=sys.stderr, flush=True)
+                if self._on_indexed is not None:
+                    done = len(self._known)
+                    self._on_indexed([], done, done, False)
         while not self._stop.wait(self._interval):
             try:
                 self.poll()

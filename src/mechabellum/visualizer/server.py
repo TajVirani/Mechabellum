@@ -95,7 +95,13 @@ class Visualizer:
         self.watcher = (
             None
             if replay_dir is None
-            else ReplayWatcher(replay_dir, self.cache, self.hub.upsert_summary, on_summaries=self.hub.set_summaries)
+            else ReplayWatcher(
+                replay_dir,
+                self.cache,
+                self.hub.upsert_summary,
+                on_summaries=self.hub.set_summaries,
+                on_indexed=lambda rows, done, total, replace: self.hub.indexed(rows, done, total, replace=replace),
+            )
         )
         self.stop_event = threading.Event()
         self.httpd = _Server((HOST, options.port), _Handler)
@@ -109,11 +115,14 @@ class Visualizer:
         return f"http://{HOST}:{self.httpd.server_address[1]}/"
 
     def start(self) -> None:
-        """Load the summaries and ratings, then start the watcher, the live source and the HTTP server threads."""
-        if self.watcher is not None:
-            self.hub.set_summaries(self.watcher.scan_existing())
-            self.watcher.start()
+        """Load the ratings, then start the watcher, the live source and the HTTP server threads.
+
+        The replay folder is indexed on the watcher thread, so the server serves at once: cached summaries go out
+        first, then each newly parsed one, with the progress on `status.indexing`.
+        """
         self.hub.set_ratings(self.cache.ratings())
+        if self.watcher is not None:
+            self.watcher.start()
         options = self.options
         if options.live:
             self._spawn("live", self._run_live)
@@ -129,6 +138,10 @@ class Visualizer:
             return True
         thread.join(timeout)
         return not thread.is_alive()
+
+    def wait_until_indexed(self, timeout: float | None = None) -> bool:
+        """Wait for the start-up scan of the replay folder; True when it has finished."""
+        return self.watcher is None or self.watcher.indexed.wait(timeout)
 
     def _run_live(self) -> None:
         options = self.options

@@ -1,4 +1,4 @@
-"""Winning-board role baseline: the mean composition of every summary's winner, by round and overall."""
+"""Winning-board role baseline: the mean composition of every summary's winner, per game mode, by round and overall."""
 
 from __future__ import annotations
 
@@ -8,9 +8,19 @@ from typing import Any
 from .roles import mean_composition
 
 THIN_BELOW = 5
+# Always present in `byMode`, and the mode a summary without one counts under.
+DEFAULT_MODE = "Normal"
 
 
 def compute_baseline(summaries: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
+    """`byMode[mode]` holds that mode's `byRound` and `overall`. Modes never mix: AsyncBattle's unit ids differ."""
+    by_mode: dict[str, list[Mapping[str, Any]]] = {DEFAULT_MODE: []}
+    for summary in summaries:
+        by_mode.setdefault(summary.get("gameMode") or DEFAULT_MODE, []).append(summary)
+    return {"byMode": {mode: mode_baseline(rows) for mode, rows in sorted(by_mode.items())}}
+
+
+def mode_baseline(summaries: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
     """`byRound[r]` averages the winners' round-r boards; `overall` averages all of them. `thin` marks n < 5."""
     by_round: dict[int, list[Mapping[str, Any]]] = {}
     for summary in summaries:

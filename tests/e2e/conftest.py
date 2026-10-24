@@ -165,6 +165,14 @@ def open_tab(browser: Any, url: str, *, width: int = 1280, height: int = 900) ->
     page.on("request", lambda request: tab.requests.append(request.url))
     page.goto(url)
     page.wait_for_function("() => window.__visualizer && window.__visualizer.store.hello.get()", timeout=20_000)
+    # The server indexes the replay folder in the background; the Stats checks want the finished set.
+    page.wait_for_function(
+        """() => {
+          const ix = window.__visualizer.store.status.get()?.indexing;
+          return ix && ix.total != null && ix.done >= ix.total;
+        }""",
+        timeout=START_TIMEOUT * 1000,
+    )
     return tab
 
 

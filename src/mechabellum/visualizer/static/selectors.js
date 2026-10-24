@@ -1,6 +1,6 @@
 // Tracked reads for panels: call these inside observe() so the effect re-runs when their inputs change.
 
-import { store, ui } from "./store.js";
+import { store, ui, isIndexing } from "./store.js";
 import { localMatches } from "./stats.js";
 
 // The Local Player's matches after the global filters.
@@ -17,7 +17,7 @@ export function allLocalMatches() {
 export function statsEmptyReason(matches) {
   if (!store.hello.get()) return "Connecting to the Visualizer server…";
   if (!store.localPlayerId.get()) return "Choose your player id to see your stats.";
-  if (!store.summaries.get().length) return "No 1v1 replays found yet.";
+  if (!store.summaries.get().length) return isIndexing(store.status.get()) ? "Indexing your replays…" : "No 1v1 replays found yet.";
   if (!matches.length) return "No matches for these filters.";
   return null;
 }

@@ -371,13 +371,17 @@ def assert_current_match(tab: Tab, *, model_available: bool, switched: bool) -> 
 
     bars = panel(tab, "composition")
     assert_bars_sum_to_one(bars, ("left", "right"))
+    # The fixture match is Normal, so it is compared with Normal's winning boards only.
+    assert bars.get_attribute("data-baseline-mode") == "Normal"
+    assert tab.page.locator('[data-indexing="active"]').count() == 0
     # No fixture replay reaches round 10, so this round has no winning-board baseline yet...
     assert bars.locator('[data-bar="baseline-missing"]').count() == 1
     # ...but the whole-match view compares against the overall baseline.
     bars.locator('[data-scope="match"]').click()
     try:
         assert_bars_sum_to_one(bars, ("left", "right", "baseline"))
-        assert "Winning boards, all rounds" in bars.locator('[data-bar="baseline"]').inner_text()
+        label = bars.locator('[data-bar="baseline"]').inner_text()
+        assert "Winning boards, all rounds" in label and "Normal" in label
     finally:
         bars.locator('[data-scope="round"]').click()
 

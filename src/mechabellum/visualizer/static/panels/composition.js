@@ -1,8 +1,9 @@
 // Current Match 3. Board composition by role: a stacked supply-share bar per player with Air / Hits-air / bodies,
 // the winning-board baseline beside them ("thin" when n < 5), a This round / Whole match toggle, and a per-round
-// line chart of the left player's role shares against the baseline (dashed).
+// line chart of the left player's role shares against the baseline (dashed). The baseline is the live match's game
+// mode's (AsyncBattle's unit ids differ from Normal's), falling back to Normal's.
 import { observe } from "../vendor/legend-state.mjs";
-import { store, ui } from "../store.js";
+import { store, ui, baselineFor } from "../store.js";
 import { ROLES, ROLE_LABELS } from "../roles.js";
 import { h, panelShell, replace, empty, pct, makeChart, baseChartOptions, axis, roleColor, cssVar, FONT, sides } from "../ui.js";
 
@@ -79,7 +80,8 @@ export function mount(container) {
     );
     const frame = store.frame.get();
     const match = store.match.get();
-    const baseline = store.baseline.get();
+    const baseline = baselineFor(store.baseline.get(), frame?.snapshot?.match?.gameMode);
+    const modeName = baseline ? (baseline.mode === "AsyncBattle" ? "Async" : baseline.mode) : null;
     if (!frame?.snapshot) {
       replace(bars, empty("No match yet."));
       legend.hidden = true;
@@ -88,6 +90,7 @@ export function mount(container) {
       return;
     }
     legend.hidden = false;
+    p.root.dataset.baselineMode = baseline?.mode || "";
     const round = frame.snapshot.match?.round ?? 0;
     const [left, right] = sides(frame);
     const rounds = Object.keys(match?.rounds || {})
@@ -118,7 +121,7 @@ export function mount(container) {
       bar("player left", nameOf(left), leftComp, { side: "left" }),
       bar("player right", nameOf(right), rightComp, { side: "right" }),
       base
-        ? bar("baseline", baseLabel, base, { side: "baseline", tag: thin ? `thin · n=${base.n ?? 0}` : base.n != null ? `n=${base.n}` : null })
+        ? bar("baseline", baseLabel, base, { side: "baseline", tag: [modeName, thin ? `thin · n=${base.n ?? 0}` : base.n != null ? `n=${base.n}` : null].filter(Boolean).join(" · ") || null })
         : h("div", { class: "comp-row baseline missing", "data-bar": "baseline-missing" }, h("div", { class: "comp-label" }, baseLabel), h("div", { class: "muted small" }, "No winning boards for this round yet.")),
     );
 

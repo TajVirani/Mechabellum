@@ -172,3 +172,36 @@ def test_watcher_thread_survives_a_failing_poll(tmp_path: Path, monkeypatch: pyt
     watcher.stop(timeout=5)
     assert watcher._thread is not None and not watcher._thread.is_alive()
     cache.close()
+
+
+def test_scan_reports_cached_rows_first_then_parsed_batches(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    replays = tmp_path / "Replay"
+    shutil.copytree(REPLAYS, replays)
+    cache = SummaryCache(tmp_path / "v.sqlite")
+    # Warm the cache with one replay only.
+    warm = tmp_path / "Warm"
+    warm.mkdir()
+    shutil.copy2(replays / WIN, warm / WIN)
+    ReplayWatcher(warm, cache, lambda _: None).scan_existing()
+    stat = (replays / WIN).stat()
+    cache.store(replays / WIN, stat.st_size, stat.st_mtime_ns, cache.lookup(warm / WIN, *_state(warm / WIN)))
+    monkeypatch.setattr(watcher_module, "INDEX_BATCH_SECONDS", 0.0)
+
+    calls: list[tuple[list[str], int, int, bool]] = []
+    watcher = ReplayWatcher(replays, cache, lambda _: None)
+    rows = watcher.scan_existing(
+        lambda rows, done, total, replace: calls.append(([r["battleId"] for r in rows], done, total, replace))
+    )
+
+    assert calls[0] == (["20261022--67509180"], 1, 4, True)
+    # Then one call per parsed file (the batch window is 0), the last one at done == total.
+    assert [call[1:] for call in calls[1:]] == [(2, 4, False), (3, 4, False), (4, 4, False)]
+    assert sorted(battle for call in calls for battle in call[0]) == sorted(row["battleId"] for row in rows)
+    assert len(rows) == 3
+    assert watcher.indexed.is_set()
+    cache.close()
+
+
+def _state(path: Path) -> tuple[int, int]:
+    stat = path.stat()
+    return stat.st_size, stat.st_mtime_ns

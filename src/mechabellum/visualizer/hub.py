@@ -68,6 +68,8 @@ class Hub:
             "detail": None,
             "gameVersion": None,
             "bridge": "absent",
+            # The start-up scan of the replay folder: {done, total} (total None until counted); None without a folder.
+            "indexing": None if replay_dir is None else {"done": 0, "total": None},
         }
         self._frame: dict[str, Any] | None = None
         # The current battle's first fight_over frame per round, replayed in the catch-up to rebuild round charts.
@@ -124,19 +126,25 @@ class Hub:
 
     def set_summaries(self, rows: Iterable[dict[str, Any]]) -> None:
         with self._lock:
-            self._summaries = {}
-            for row in rows:
-                self._summaries.setdefault(_summary_key(row), row)
-            self._summaries_changed()
-            self._send("summaries", {"rows": self._sorted_summaries()})
-            self._send("baseline", self._baseline)
+            self._replace_summaries(rows)
 
     def upsert_summary(self, row: dict[str, Any]) -> None:
         with self._lock:
-            self._summaries[_summary_key(row)] = row
-            self._summaries_changed()
-            self._send("summary", {"row": row})
-            self._send("baseline", self._baseline)
+            self._upsert_summaries([row])
+
+    def indexed(self, rows: list[dict[str, Any]], done: int, total: int, *, replace: bool = False) -> None:
+        """Progress of the start-up scan: `rows` replace the set (the cached ones) or are upserted (newly parsed).
+
+        One `summaries` (replace) or a `summary` per row, then one `baseline`, a `config` if the suggested player
+        changed, and `status` with the new `indexing` progress.
+        """
+        with self._lock:
+            if replace:
+                self._replace_summaries(rows)
+            elif rows:
+                self._upsert_summaries(rows)
+            self._status = {**self._status, "indexing": {"done": done, "total": total}}
+            self._send("status", dict(self._status))
 
     def set_ratings(self, ratings: dict[str, dict[str, int]]) -> None:
         with self._lock:
@@ -192,7 +200,7 @@ class Hub:
     def set_local_player(self, player_id: str | None) -> None:
         with self._lock:
             self._local_player_id = player_id
-            self._send("config", {"localPlayerId": player_id})
+            self._send("config", self._config())
 
     # ---- internals (lock held) -------------------------------------------------------------------------------
 
@@ -221,9 +229,35 @@ class Hub:
             events.append(("predictions", self._predictions))
         return events
 
-    def _summaries_changed(self) -> None:
+    def _replace_summaries(self, rows: Iterable[dict[str, Any]]) -> None:
+        self._summaries = {}
+        for row in rows:
+            self._summaries.setdefault(_summary_key(row), row)
+        suggestion_changed = self._summaries_changed()
+        self._send("summaries", {"rows": self._sorted_summaries()})
+        self._send("baseline", self._baseline)
+        if suggestion_changed:
+            self._send("config", self._config())
+
+    def _upsert_summaries(self, rows: list[dict[str, Any]]) -> None:
+        for row in rows:
+            self._summaries[_summary_key(row)] = row
+        suggestion_changed = self._summaries_changed()
+        for row in rows:
+            self._send("summary", {"row": row})
+        self._send("baseline", self._baseline)
+        if suggestion_changed:
+            self._send("config", self._config())
+
+    def _summaries_changed(self) -> bool:
+        """Recompute the baseline and the suggestion; True when the suggested player changed."""
+        before = self._suggested
         self._baseline = compute_baseline(self._summaries.values())
         self._suggested = suggest_player_id(self._summaries.values())
+        return self._suggested != before
+
+    def _config(self) -> dict[str, Any]:
+        return {"localPlayerId": self._local_player_id, "suggestedPlayerId": self._suggested}
 
     def _sorted_summaries(self) -> list[dict[str, Any]]:
         return sorted(self._summaries.values(), key=lambda row: (row.get("battleId") or "", row["replayPath"]))
