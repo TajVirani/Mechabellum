@@ -47,10 +47,10 @@
 
 ## P2: Action recommendation and self-play
 
-- [ ] Implement ranking of candidate purchase, upgrade, technology, and deployment actions on top of the win probability model
-- [ ] Investigate whether `ReplaySimulateMatch` / `ReplayAIMatch` can customize positions, run headless at accelerated speed, and run in batches
+- [x] Implement ranking of candidate purchase, upgrade, technology, and deployment actions on top of the win probability model (`mecha recommend`; static model judgement, no simulated fight)
+- [x] Investigate whether `ReplaySimulateMatch` / `ReplayAIMatch` can customize positions, run headless at accelerated speed, and run in batches (read-only findings and design in docs/self-play.md; confirming needs MelonLoader)
 - [ ] If an internal simulation entry point is available, wrap it as an AI-vs-AI self-play environment
 - [ ] Implement a reproducible batch AI-vs-AI match and `.grbr` replay generator that records random seeds, both strategy versions, game build, and complete results
-- [ ] Build version indexing, deduplication, abnormal match filtering, and distribution statistics for generated data, and evaluate generalization on a test set of real player replays only
+- [x] Build version indexing, deduplication, abnormal match filtering, and distribution statistics for generated data, and evaluate generalization on a test set of real player replays only (`mecha dataset-stats`, `mecha evaluate`)
 - [ ] Investigate sampling ratios, sample weights, and curriculum learning strategies for real replays vs. self-play data
 - [ ] Continuously calibrate the simulation environment against real replays so results do not only hold in an approximate simulator

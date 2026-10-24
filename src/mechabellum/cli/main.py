@@ -56,6 +56,15 @@ def _parser() -> argparse.ArgumentParser:
     export.add_argument("replay_directory", type=Path, nargs="?")
     export.add_argument("--output", type=Path, required=True)
 
+    stats = _command(
+        commands,
+        "dataset-stats",
+        "Index a replay folder by version, drop duplicates, list abnormal matches and report distributions.",
+        _dataset_stats,
+    )
+    stats.add_argument("replay_directory", type=Path, nargs="?")
+    stats.add_argument("--list-abnormal", action="store_true", help="Also list each abnormal replay and why.")
+
     _command(commands, "live-probe", "Report the live memory layout and match state.", _live_probe)
     live = _command(commands, "live", "Read one live match snapshot.", _live)
     live.add_argument("--json", action="store_true")
@@ -113,6 +122,49 @@ def _parser() -> argparse.ArgumentParser:
         default=0.0,
         help="Weight of the auxiliary next-fight advantage loss; 0 trains on the final result only.",
     )
+
+    recommend = _command(
+        commands,
+        "recommend",
+        "Rank candidate buys, upgrades, technologies, moves and cards for one player of a fight_over position.",
+        _recommend,
+    )
+    recommend.add_argument("--input", type=Path, help="MatchSnapshot JSON; reads standard input when omitted.")
+    recommend.add_argument("--player", type=int, choices=(0, 1), default=0)
+    recommend.add_argument(
+        "--dataset",
+        type=Path,
+        required=True,
+        help="Replay dataset the unit prices, technologies and card effects are learned from.",
+    )
+    recommend.add_argument("--model", type=Path, default=Path("artifacts/win_model.joblib"))
+    recommend.add_argument(
+        "--cards",
+        type=lambda text: [int(item) for item in text.split(",") if item],
+        default=[],
+        help="Comma-separated offered card ids.",
+    )
+    recommend.add_argument(
+        "--round-weight", type=float, default=0.0, help="Weight of a multi-task model's predicted next-fight advantage."
+    )
+    recommend.add_argument("--top", type=int, default=10)
+
+    ablate = _command(
+        commands,
+        "ablate",
+        "Compare final-result-only and multi-task token models on calibration and card ranking.",
+        _ablate,
+    )
+    ablate.add_argument("--dataset", type=Path, required=True)
+    ablate.add_argument("--architecture", choices=("deepsets", "transformer", "gnn"), default="deepsets")
+    ablate.add_argument(
+        "--weights", type=lambda text: [float(item) for item in text.split(",")], default=[0.0, 0.1, 0.3, 1.0]
+    )
+    ablate.add_argument(
+        "--round-weights", type=lambda text: [float(item) for item in text.split(",")], default=[0.0, 0.3]
+    )
+    ablate.add_argument("--split", choices=("group", "time"), default="group")
+    ablate.add_argument("--output-directory", type=Path, default=Path("artifacts/ablation"))
 
     evaluate = _command(
         commands,
@@ -187,6 +239,16 @@ def _export_dataset(args: argparse.Namespace) -> None:
         f"snapshots {summary.snapshot_count}, failures {summary.failure_count}, output {args.output.resolve()}",
         file=sys.stderr,
     )
+
+
+def _dataset_stats(args: argparse.Namespace) -> None:
+    from ..datasets.hygiene import scan_replays
+
+    stats = scan_replays(args.replay_directory or _require_replay_directory())
+    report = stats.to_dict()
+    if args.list_abnormal:
+        report["abnormal"] = stats.abnormal
+    print(json.dumps(report, ensure_ascii=False, indent=2))
 
 
 def _live_probe(_: argparse.Namespace) -> None:
@@ -319,6 +381,57 @@ def _train_deep(args: argparse.Namespace) -> None:
         advantage_weight=args.advantage_weight,
     )
     print(json.dumps(metadata, ensure_ascii=False, indent=2))
+
+
+def _recommend(args: argparse.Namespace) -> None:
+    from ..datasets import load_training_snapshots
+    from ..features import feature_names
+    from ..inference.actions import ActionCatalog, candidate_actions, rank_actions
+    from ..models import load_artifact
+
+    data = json.load(sys.stdin) if args.input is None else json.loads(args.input.read_text(encoding="utf-8-sig"))
+    snapshot = validate_snapshot(data)
+    catalog = ActionCatalog.from_snapshots(load_training_snapshots(args.dataset))
+    artifact = load_artifact(args.model, feature_names())
+    candidates = candidate_actions(snapshot, args.player, catalog, args.cards)
+    baseline, ranked = rank_actions(artifact, snapshot, args.player, candidates, args.round_weight)
+    result = {
+        "player": snapshot.players[args.player].name,
+        "round": snapshot.match.round,
+        "baselineWinProbability": baseline,
+        "candidates": len(ranked),
+        "ranking": [
+            {
+                "kind": item.action.kind,
+                "description": item.action.description,
+                "parameters": item.action.parameters,
+                "estimatedCost": item.action.estimated_cost,
+                "winProbability": item.win_probability,
+                "gain": item.gain,
+            }
+            for item in ranked[: args.top]
+        ],
+        "note": "Static model judgement of the changed board; no fight is simulated.",
+    }
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+def _ablate(args: argparse.Namespace) -> None:
+    from ..training.ablation import run_ablation
+
+    report = run_ablation(
+        args.dataset,
+        args.output_directory,
+        architecture=args.architecture,
+        advantage_weights=args.weights,
+        round_weights=args.round_weights,
+        split=args.split,
+    )
+    args.output_directory.mkdir(parents=True, exist_ok=True)
+    (args.output_directory / "ablation.json").write_text(
+        json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    print(json.dumps(report, ensure_ascii=False, indent=2))
 
 
 def _evaluate(args: argparse.Namespace) -> None:

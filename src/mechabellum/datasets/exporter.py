@@ -24,11 +24,17 @@ def export_replay_directory(replay_directory: Path, output_path: Path) -> Export
     snapshots: list[MatchSnapshot] = []
     matches = 0
     failures: list[str] = []
+    seen_battles: set[str] = set()
     for path in paths:
         try:
             replay = parse_replay(path)
             if len(replay.players) != 2 or replay.match_mode != "VS_1_1" or replay.winner_index is None:
                 continue
+            # The same match can be saved more than once; keep the first file so it is not counted twice.
+            if replay.battle_id is not None:
+                if replay.battle_id in seen_battles:
+                    continue
+                seen_battles.add(replay.battle_id)
             matches += 1
             snapshots.extend(select_round(replay, round_number) for round_number in replay.snapshot_rounds)
         except Exception as error:

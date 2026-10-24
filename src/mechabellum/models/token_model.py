@@ -31,6 +31,19 @@ class TokenModel:
         with torch.no_grad():
             return torch.sigmoid(self.net(own, opponent)).numpy().astype(np.float64)
 
+    def next_fight_advantages(self, snapshots: Sequence[MatchSnapshot], perspectives: Sequence[int]) -> np.ndarray:
+        """Predicted advantage of the next fight for each row's perspective player, in [-1, 1]."""
+        import torch
+
+        from .token_encoding import encode
+        from .token_net import to_tensors
+
+        own = to_tensors(encode(snapshots, perspectives, self.vocabulary))
+        opponent = to_tensors(encode(snapshots, [1 - perspective for perspective in perspectives], self.vocabulary))
+        self.net.eval()
+        with torch.no_grad():
+            return self.net.heads(own, opponent)[1].numpy().astype(np.float64)
+
 
 def save_token_artifact(path: Path, model: TokenModel, metadata: dict[str, Any]) -> None:
     import torch

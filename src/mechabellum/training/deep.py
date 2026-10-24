@@ -143,6 +143,7 @@ def train_token_model(
         "trainingMatchCount": len(set(rows.battle_ids[train_indices].tolist())),
         "validationMatchCount": len(set(rows.battle_ids[validation_indices].tolist())),
         "testMatchCount": len(set(test.battle_ids.tolist())),
+        "testBattleIds": sorted(set(test.battle_ids.tolist())),
         "parameterCount": sum(parameter.numel() for parameter in net.parameters()),
         "bestEpoch": best_epoch,
         "epochsRun": len(history),

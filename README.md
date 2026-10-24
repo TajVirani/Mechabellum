@@ -96,6 +96,18 @@ With the `deep` extra (`pip install -e ".[ml,deep]"`), train a token model over 
 .venv\Scripts\mecha train-deep --dataset data\match-snapshots.v2.jsonl --architecture transformer
 ```
 
+Rank candidate actions for one player of a position (buys, upgrades, technologies, moves, and offered cards) by how much the model thinks each improves their win probability. Unit prices and card effects are learned from the dataset; no fight is simulated, so this is the model's static judgement of the changed board:
+
+```powershell
+.venv\Scripts\mecha recommend --input position.json --player 1 --dataset data\match-snapshots.v2.jsonl --cards 13030005,20003
+```
+
+Check a replay folder before training on it, real or generated: version index, duplicates, abnormal matches and distributions:
+
+```powershell
+.venv\Scripts\mecha dataset-stats
+```
+
 While spectating, output both players' final win probabilities when each round's fight ends:
 
 ```powershell
