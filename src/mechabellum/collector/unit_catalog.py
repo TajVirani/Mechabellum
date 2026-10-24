@@ -1,5 +1,6 @@
 import json
 from importlib.resources import files
+from typing import Any
 
 UNIT_NAMES: dict[int, str] = {
     1: "Fortress",
@@ -38,44 +39,83 @@ UNIT_NAMES: dict[int, str] = {
 }
 
 
-# Names extracted from game 1.8.0.3 by https://github.com/mechstats/mech-data; ids added since then are unknown.
+# Names and prices from game 2.0.0.4 (https://github.com/qbisi/mechcore), with names of ids that build no longer holds
+# from game 1.8.0.3 (https://github.com/mechstats/mech-data). Ids neither holds, such as AsyncBattle's, are unknown.
 _GAME_NAMES = json.loads(files(__package__).joinpath("game_names.json").read_text(encoding="utf-8"))
 GAME_NAMES_VERSION: str = _GAME_NAMES["gameVersion"]
 
 
-def _table(key: str) -> dict[int, str]:
-    return {int(item_id): name for item_id, name in _GAME_NAMES[key].items()}
+def _table(key: str) -> dict[int, Any]:
+    return {int(item_id): value for item_id, value in _GAME_NAMES[key].items()}
 
 
-OFFICER_NAMES = _table("officers")
-EQUIPMENT_NAMES = _table("equipment")
-TECHNOLOGY_NAMES = _table("technologies")
-ADVANCE_TEAM_NAMES = _table("advanceTeams")
+OFFICER_NAMES: dict[int, str] = _table("officers")
+EQUIPMENT_NAMES: dict[int, str] = _table("equipment")
+TECHNOLOGY_NAMES: dict[int, str] = _table("technologies")
+COMMANDER_SKILL_NAMES: dict[int, str] = _table("commanderSkills")
+BLUEPRINT_NAMES: dict[int, str] = _table("blueprints")
+ENERGY_TOWER_SKILL_NAMES: dict[int, str] = _table("energyTowerSkills")
+MAP_NAMES: dict[int, str] = _table("maps")
+ADVANCE_TEAM_NAMES: dict[int, str] = _table("advanceTeams")
+UNIT_CARD_NAMES: dict[int, str] = _table("unitCards")
+# Per unit: supply, unlockSupply, upgradeSupply and members (squad size); keys absent where the game has no price.
+UNIT_PRICES: dict[int, dict[str, int]] = _table("unitPrices")
+TECHNOLOGY_SUPPLY: dict[int, int] = _table("technologySupply")
+# Cards with a price of their own; the rest sell at their card level's price.
+CARD_SUPPLY: dict[int, int] = _table("cardSupply")
+
+
+def _name(table: dict[int, str], item_id: int, kind: str) -> str:
+    return table.get(item_id, f"Unknown {kind} ({item_id})")
 
 
 def unit_name(unit_id: int) -> str:
-    return UNIT_NAMES.get(unit_id, f"Unknown unit ({unit_id})")
+    return _name(UNIT_NAMES, unit_id, "unit")
 
 
 def officer_name(officer_id: int) -> str:
-    return OFFICER_NAMES.get(officer_id, f"Unknown specialist ({officer_id})")
+    return _name(OFFICER_NAMES, officer_id, "specialist")
 
 
 def equipment_name(equipment_id: int) -> str:
-    return EQUIPMENT_NAMES.get(equipment_id, f"Unknown equipment ({equipment_id})")
+    return _name(EQUIPMENT_NAMES, equipment_id, "equipment")
 
 
 def technology_name(technology_id: int) -> str:
-    return TECHNOLOGY_NAMES.get(technology_id, f"Unknown technology ({technology_id})")
+    return _name(TECHNOLOGY_NAMES, technology_id, "technology")
+
+
+def commander_skill_name(skill_id: int) -> str:
+    return _name(COMMANDER_SKILL_NAMES, skill_id, "commander skill")
+
+
+def blueprint_name(blueprint_id: int) -> str:
+    return _name(BLUEPRINT_NAMES, blueprint_id, "blueprint")
+
+
+def energy_tower_skill_name(skill_id: int) -> str:
+    return _name(ENERGY_TOWER_SKILL_NAMES, skill_id, "energy tower skill")
+
+
+def map_name(map_id: int) -> str:
+    return _name(MAP_NAMES, map_id, "map")
 
 
 def advance_team_name(advance_team_id: int) -> str:
-    return ADVANCE_TEAM_NAMES.get(advance_team_id, f"Unknown opening lineup ({advance_team_id})")
+    return _name(ADVANCE_TEAM_NAMES, advance_team_id, "opening lineup")
 
 
 def card_name(card_id: int) -> str:
-    """Name a reinforcement card, which can be a specialist, equipment, technology, or unit."""
-    for table in (OFFICER_NAMES, EQUIPMENT_NAMES, TECHNOLOGY_NAMES, UNIT_NAMES):
+    """Name a reinforcement card: a specialist, equipment, technology, commander skill, blueprint, or units."""
+    for table in (
+        OFFICER_NAMES,
+        EQUIPMENT_NAMES,
+        TECHNOLOGY_NAMES,
+        COMMANDER_SKILL_NAMES,
+        BLUEPRINT_NAMES,
+        UNIT_CARD_NAMES,
+        UNIT_NAMES,
+    ):
         if card_id in table:
             return table[card_id]
     return f"Unknown card ({card_id})"

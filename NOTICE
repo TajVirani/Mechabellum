@@ -1,4 +1,5 @@
 Required Notice: Copyright 2026 scarletkc (https://github.com/scarletkc)
 
-src/mechabellum/collector/game_names.json holds names from Mechabellum game data, as extracted by
-https://github.com/mechstats/mech-data. The game data belongs to its developer, Game River.
+src/mechabellum/collector/game_names.json holds names and prices from Mechabellum game data, as extracted by
+https://github.com/qbisi/mechcore and https://github.com/mechstats/mech-data. The game data belongs to its
+developer, Game River.
