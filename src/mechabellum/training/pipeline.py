@@ -15,7 +15,7 @@ from sklearn.preprocessing import StandardScaler
 
 from ..contracts import MATCH_SNAPSHOT_SCHEMA_VERSION, MODEL_SNAPSHOT_PHASE
 from ..datasets import load_training_snapshots
-from ..features import feature_names
+from ..features import FEATURE_SCHEMA_VERSION, feature_names
 from ..models import create_artifact, save_artifact
 from .calibration import CalibratedModel
 from .evaluation import EvaluationRows, evaluation_report
@@ -82,7 +82,7 @@ def train_model(
         "datasetPath": str(dataset_path),
         "datasetSha256": hashlib.sha256(dataset_path.read_bytes()).hexdigest().upper(),
         "matchSnapshotSchemaVersion": MATCH_SNAPSHOT_SCHEMA_VERSION,
-        "featureSchemaVersion": 1,
+        "featureSchemaVersion": FEATURE_SCHEMA_VERSION,
         "snapshotPhase": MODEL_SNAPSHOT_PHASE,
         "split": split,
         "calibration": calibration,

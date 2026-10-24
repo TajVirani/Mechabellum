@@ -6,11 +6,12 @@ from typing import Any
 
 def create_artifact(model: Any, feature_names: list[str]) -> dict[str, Any]:
     from ..contracts import MATCH_SNAPSHOT_SCHEMA_VERSION, MODEL_SNAPSHOT_PHASE
+    from ..features import FEATURE_SCHEMA_VERSION
 
     return {
         "model": model,
         "featureNames": feature_names,
-        "featureSchemaVersion": 1,
+        "featureSchemaVersion": FEATURE_SCHEMA_VERSION,
         "matchSnapshotSchemaVersion": MATCH_SNAPSHOT_SCHEMA_VERSION,
         "snapshotPhase": MODEL_SNAPSHOT_PHASE,
     }
@@ -27,8 +28,11 @@ def load_artifact(path: Path, expected_feature_names: list[str]) -> dict[str, An
     import joblib
 
     from ..contracts import MATCH_SNAPSHOT_SCHEMA_VERSION, MODEL_SNAPSHOT_PHASE
+    from ..features import FEATURE_SCHEMA_VERSION
 
     artifact = joblib.load(path)
+    if artifact.get("featureSchemaVersion") != FEATURE_SCHEMA_VERSION:
+        raise ValueError("Model feature schema version does not match the code; please retrain.")
     if artifact.get("featureNames") != expected_feature_names:
         raise ValueError("Model feature version does not match the code; please retrain.")
     if artifact.get("matchSnapshotSchemaVersion") != MATCH_SNAPSHOT_SCHEMA_VERSION:
