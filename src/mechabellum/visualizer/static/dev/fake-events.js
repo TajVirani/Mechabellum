@@ -162,7 +162,7 @@ function catchUp() {
 }
 
 globalThis.process = { env: { NODE_ENV: "production" } };
-start({ live: false });
+await start({ live: false });
 catchUp();
 if (!params.has("view")) ui.view.set("stats");
 else ui.view.set(params.get("view"));

@@ -78,9 +78,11 @@ function recordFrame(frame) {
   const rounds = previous && previous.battleId === battleId ? { ...previous.rounds } : {};
   const players = snapshot?.players || [];
   const entry = { ...(rounds[round] || {}) };
-  entry.composition = players.map((_, i) => compositionFor(frame, i));
-  if (phase === "fight_over" || !entry.fightEnd) {
-    // Army value and HP come from the fight's end; until it ends, keep the latest frame as a provisional point.
+  if (!entry.fightEnd) {
+    // Composition, army value and HP come from the round's first fight_over frame (as the server's catch-up
+    // history does); until the fight ends, keep the latest frame as a provisional point. Later frames of the same
+    // round (repeats, or a cleared board at the match's end) don't move it.
+    entry.composition = players.map((_, i) => compositionFor(frame, i));
     entry.army = players.map(armyValue);
     entry.hp = players.map((p) => p.reactorCore ?? null);
     entry.fightEnd = phase === "fight_over";
@@ -98,6 +100,15 @@ function recordFrame(frame) {
     });
   });
   store.match.set({ battleId, rounds });
+}
+
+function sameFrame(a, b) {
+  if (!a || !b) return false;
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch {
+    return false;
+  }
 }
 
 export function applyEvent(type, data) {
@@ -133,6 +144,8 @@ export function applyEvent(type, data) {
         store.status.set(data);
         break;
       case "frame":
+        // The catch-up resends the latest round's fight_over frame after the round history; skip exact repeats.
+        if (sameFrame(store.frame.peek(), data)) break;
         store.frame.set(data);
         recordFrame(data);
         break;

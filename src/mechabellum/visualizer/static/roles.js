@@ -1,6 +1,6 @@
-// Unit names and roles for the browser. Mirrors `unit_roles.json` (from research/unit-roles.md) and
-// `collector/unit_catalog.py` UNIT_NAMES; the server owns the composition maths, this table only names units
-// and colours their chips. A unit missing here is "unknown".
+// Unit names and roles for the browser, loaded from the server's `GET /catalog.json` (built from `unit_roles.json`
+// and `collector/unit_catalog.py`). The server owns the composition maths; this table only names units and colours
+// their chips. A unit missing from the catalog is "unknown". Call `loadCatalog()` once before mounting panels.
 
 export const ROLES = ["chaff", "chaffClear", "damage", "tank", "support", "unknown"];
 
@@ -13,54 +13,34 @@ export const ROLE_LABELS = {
   unknown: "Unknown",
 };
 
-// id: [name, primary, secondary, air, hitsAir, members]
-const TABLE = {
-  1: ["Fortress", "tank", "damage", false, false, 1],
-  2: ["Marksman", "damage", null, false, true, 1],
-  3: ["Vulcan", "chaffClear", "tank", false, false, 1],
-  4: ["Melting Point", "damage", null, false, true, 1],
-  5: ["Rhino", "damage", "tank", false, false, 1],
-  6: ["Wasp", "chaff", "damage", true, true, 12],
-  7: ["Mustang", "damage", "chaff", false, true, 12],
-  8: ["Steel Ball", "damage", "chaff", false, false, 4],
-  9: ["Fang", "chaff", "damage", false, true, 18],
-  10: ["Crawler", "chaff", null, false, false, 24],
-  11: ["Overlord", "damage", "chaffClear", true, true, 1],
-  12: ["Stormcaller", "chaffClear", "damage", false, false, 4],
-  13: ["Sledgehammer", "tank", "chaff", false, false, 5],
-  14: ["Hacker", "support", null, false, false, 1],
-  15: ["Arclight", "chaffClear", null, false, false, 1],
-  16: ["Phoenix", "damage", null, true, true, 2],
-  17: ["War Factory", "tank", "damage", false, false, 1],
-  18: ["Wraith", "chaffClear", "tank", true, true, 1],
-  19: ["Scorpion", "damage", "tank", false, false, 1],
-  20: ["Fire Badger", "chaffClear", null, false, false, 3],
-  21: ["Sabertooth", "tank", "damage", false, false, 1],
-  22: ["Typhoon", "chaffClear", "support", false, true, 2],
-  23: ["Sandworm", "damage", "tank", false, false, 1],
-  24: ["Tarantula", "chaffClear", "tank", false, false, 1],
-  25: ["Phantom Ray", "damage", "chaffClear", true, true, 3],
-  26: ["Farseer", "support", "damage", false, true, 1],
-  27: ["Raiden", "chaffClear", "damage", true, true, 1],
-  28: ["Hound", "chaffClear", "chaff", false, false, 5],
-  29: ["Abyss", "damage", null, true, true, 1],
-  30: ["Void Eye", "damage", null, false, false, 3],
-  31: ["Vortex", "tank", "damage", false, false, 1],
-  32: ["Centurion", "damage", "tank", false, true, 1],
-  2002: ["Mountain", "tank", "damage", false, false, 1],
-};
+// {id: {name, primary, secondary, air, hitsAir, members}}. Empty until the catalog loads; if the fetch fails it
+// stays empty, so every unit shows as "Unknown unit (<id>)" rather than breaking the page.
+let UNITS = {};
+
+export async function loadCatalog(url = "/catalog.json") {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    UNITS = data && typeof data.units === "object" ? data.units : {};
+  } catch (err) {
+    console.warn("Visualizer: unit catalog unavailable; units show as unknown.", err);
+    UNITS = {};
+  }
+  return UNITS;
+}
 
 export function unitInfo(id) {
-  const row = TABLE[id];
+  const row = UNITS[id];
   if (!row) {
     return { id, name: `Unknown unit (${id})`, primary: "unknown", secondary: null, air: false, hitsAir: false, members: 1 };
   }
-  const [name, primary, secondary, air, hitsAir, members] = row;
-  return { id, name, primary, secondary, air, hitsAir, members };
+  const primary = ROLES.includes(row.primary) ? row.primary : "unknown";
+  return { id, name: row.name, primary, secondary: row.secondary ?? null, air: !!row.air, hitsAir: !!row.hitsAir, members: row.members || 1 };
 }
 
 export function unitName(id, fallback) {
-  return TABLE[id] ? TABLE[id][0] : fallback || `Unknown unit (${id})`;
+  return UNITS[id] ? UNITS[id].name : fallback || `Unknown unit (${id})`;
 }
 
 // Fallback only: the server sends `composition` with every frame. Used when a frame arrives without it.

@@ -148,7 +148,7 @@ export function mount(container) {
       chart.setOption(
         {
           ...opts,
-          grid: { left: 40, right: 12, top: 22, bottom: 24 },
+          grid: { left: 40, right: 12, top: 30, bottom: 24 },
           title: { text: `${nameOf(left)} by round · dashed = winning boards`, left: 0, top: 0, textStyle: { color: cssVar("--text-secondary"), fontFamily: FONT, fontSize: 11, fontWeight: "normal" } },
           xAxis: axis("category", { data: chartRounds.map(String), boundaryGap: false, splitLine: { show: false } }),
           yAxis: axis("value", { min: 0, max: 100, interval: 25, axisLabel: { ...axis("value").axisLabel, formatter: "{value}%" } }),

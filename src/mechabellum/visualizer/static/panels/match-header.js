@@ -18,7 +18,8 @@ export function mount(container) {
     const outcome = snapshot.outcome;
     const plate = (s) => {
       const pl = s.player || {};
-      const hp = pl.reactorCore;
+      // The core can go below 0 on the killing blow; never show negative HP.
+      const hp = pl.reactorCore == null ? null : Math.max(0, pl.reactorCore);
       const maxHp = pl.maxReactorCore || null;
       const won = outcome ? outcome.winnerIndex === s.index : null;
       return h(

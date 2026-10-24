@@ -619,6 +619,9 @@ input {
 }
 
 .stat-tile {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   padding: 12px 14px;
   background: var(--surface-row-deep);
   clip-path: var(--cut-small);

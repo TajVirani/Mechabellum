@@ -3,6 +3,7 @@
 import { observe } from "./vendor/legend-state.mjs";
 import { store, ui, applyEvent, setConnection, EVENT_TYPES } from "./store.js";
 import { h } from "./ui.js";
+import { loadCatalog } from "./roles.js";
 
 import * as setup from "./panels/setup.js";
 import * as filters from "./panels/filters.js";
@@ -160,7 +161,9 @@ export function connect(url = "/events") {
   return () => source && source.close();
 }
 
-export function start({ live = true } = {}) {
+// Loads the unit catalog first (panels name units synchronously), then mounts and connects.
+export async function start({ live = true } = {}) {
+  await loadCatalog();
   const layout = buildLayout(document.getElementById("app"));
   mountPanels(layout);
   bindViews(layout);

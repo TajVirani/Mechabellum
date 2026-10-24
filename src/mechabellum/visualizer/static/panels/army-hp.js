@@ -33,7 +33,11 @@ export function mount(container) {
     const [left, right] = sides(frame);
     const self = cssVar("--team-self-hi");
     const enemy = cssVar("--team-enemy-hi");
-    const at = (r, key, i) => match.rounds[r]?.[key]?.[i] ?? null;
+    const at = (r, key, i) => {
+      const value = match.rounds[r]?.[key]?.[i] ?? null;
+      // The killing blow can take the core below 0; chart it as 0 rather than off the axis.
+      return value == null ? null : Math.max(0, value);
+    };
     const line = (name, data, color, yAxisIndex, dashed) => ({
       name,
       type: "line",
