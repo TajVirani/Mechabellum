@@ -35,6 +35,9 @@ mecha = "mechabellum.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+"mechabellum.collector" = ["game_names.json"]
+
 [tool.setuptools.data-files]
 "share/mechabellum/contracts/match-snapshot/v1" = [
   "contracts/match-snapshot/v1/schema.json",

@@ -21,7 +21,7 @@
 - [x] Output the opening lineup choice (`openingLineup`, from the round 0 `PAD_ChooseAdvanceTeam`)
 - [x] Read the current round's candidate and chosen cards from the live `ReinforcementManager`
 - [ ] Map live blueprint and energy tower skill ids to the values replays record
-- [ ] Build ID-to-name/cost tables for cards, technologies, equipment, and specialists
+- [ ] Build ID-to-name/cost tables for cards, technologies, equipment, and specialists (names from game 1.8.0.3 in `collector/game_names.json`; still missing ids added in 2.0, commander skills, and costs)
 
 ## P1B: Complete position description
 
