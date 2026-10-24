@@ -101,6 +101,13 @@ class TokenNet(nn.Module):
             nn.Dropout(config.dropout),
             nn.Linear(width, 1),
         )
+        # Auxiliary head for the next fight's advantage; trained only when the advantage loss weight is above 0.
+        self.advantage_head = nn.Sequential(
+            nn.Linear(pooled + 2 * width, width),
+            nn.GELU(),
+            nn.Dropout(config.dropout),
+            nn.Linear(width, 1),
+        )
 
     def _tokens(self, batch: dict[str, torch.Tensor]) -> torch.Tensor:
         side = batch["numeric"][..., 0].long()
@@ -159,6 +166,9 @@ class TokenNet(nn.Module):
         return state
 
     def score(self, batch: dict[str, torch.Tensor]) -> torch.Tensor:
+        return self.head(self.representation(batch)).squeeze(-1)
+
+    def representation(self, batch: dict[str, torch.Tensor]) -> torch.Tensor:
         mixed = self._mix(self._tokens(batch), batch)
         mask = batch["mask"]
         side = batch["numeric"][..., 0]
@@ -169,8 +179,17 @@ class TokenNet(nn.Module):
         opponent_bags = torch.stack([bag[:, 1] for bag in bags]).mean(0)
         context = sum(embedding(batch["context_ids"][:, index]) for index, embedding in enumerate(self.context_ids))
         features = self.context_features(batch["context_features"])
-        return self.head(torch.cat([own, opponent, own_bags, opponent_bags, context, features], -1)).squeeze(-1)
+        return torch.cat([own, opponent, own_bags, opponent_bags, context, features], -1)
 
     def forward(self, own_view: dict[str, torch.Tensor], opponent_view: dict[str, torch.Tensor]) -> torch.Tensor:
         """Logit that the perspective player of `own_view` wins; antisymmetric by construction."""
         return self.score(own_view) - self.score(opponent_view)
+
+    def heads(
+        self, own_view: dict[str, torch.Tensor], opponent_view: dict[str, torch.Tensor]
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Win logit and predicted next-fight advantage in [-1, 1], both antisymmetric in the two views."""
+        own, opponent = self.representation(own_view), self.representation(opponent_view)
+        logit = (self.head(own) - self.head(opponent)).squeeze(-1)
+        advantage = torch.tanh(self.advantage_head(own) - self.advantage_head(opponent)).squeeze(-1)
+        return logit, advantage

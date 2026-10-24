@@ -52,3 +52,12 @@ def test_token_models_train_save_and_predict_symmetrically(tmp_path: Path, archi
     # Antisymmetric by construction: each perspective's probability is one minus the other's.
     raw = artifact["model"].win_probabilities([snapshots[0], snapshots[0]], [0, 1])
     np.testing.assert_allclose(raw.sum(), 1.0, atol=1e-6)
+
+
+def test_multi_task_training_reports_the_next_fight_advantage(tmp_path: Path) -> None:
+    dataset, _ = _dataset(tmp_path)
+    metadata = train_token_model(
+        dataset, tmp_path / "model.pt", architecture="deepsets", epochs=2, patience=2, width=16, advantage_weight=0.5
+    )
+    assert metadata["advantageWeight"] == 0.5
+    assert "metrics" in metadata

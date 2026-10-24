@@ -107,6 +107,12 @@ def _parser() -> argparse.ArgumentParser:
     deep.add_argument("--split", choices=("group", "time"), default="group")
     deep.add_argument("--epochs", type=int, default=300)
     deep.add_argument("--seed", type=int, default=20260711)
+    deep.add_argument(
+        "--advantage-weight",
+        type=float,
+        default=0.0,
+        help="Weight of the auxiliary next-fight advantage loss; 0 trains on the final result only.",
+    )
 
     evaluate = _command(
         commands,
@@ -304,7 +310,13 @@ def _train_deep(args: argparse.Namespace) -> None:
 
     output = args.output or Path(f"artifacts/win_model_{args.architecture}.pt")
     metadata = train_token_model(
-        args.dataset, output, architecture=args.architecture, split=args.split, epochs=args.epochs, seed=args.seed
+        args.dataset,
+        output,
+        architecture=args.architecture,
+        split=args.split,
+        epochs=args.epochs,
+        seed=args.seed,
+        advantage_weight=args.advantage_weight,
     )
     print(json.dumps(metadata, ensure_ascii=False, indent=2))
 
