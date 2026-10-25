@@ -31,7 +31,7 @@ mecha visualize [--port 8765] [--no-browser] [--replay-dir DIR] [--data-dir DIR]
 
 | Module | Holds |
 | --- | --- |
-| `server.py` | HTTP server, static files, `/events` SSE, `/api/local-player` |
+| `server.py` | HTTP server, static files, `/events` SSE, `/api/local-player`, the insight endpoints |
 | `hub.py` | Current state plus fan-out to SSE clients; catch-up on connect |
 | `summaries.py` | Replay → Match Summary, the `SUMMARY_VERSION` constant |
 | `cache.py` | sqlite cache of summaries and captured ratings |
@@ -39,6 +39,8 @@ mecha visualize [--port 8765] [--no-browser] [--replay-dir DIR] [--data-dir DIR]
 | `live.py` | Live source thread (memory or playback): retry, prediction at fight end, rating capture, Local Player detection, status |
 | `roles.py` + `unit_roles.json` | The unit → role table, plus composition maths |
 | `baseline.py` | Winning-board role baseline per game mode, by round and overall |
+| `insights.py` | What winning boards have, and counters, from the summaries' `boards`; cached until the summaries change |
+| `recommend.py` | Live recommended purchases (its own thread), from `inference/actions.py`, plus counters against the opponent's board |
 | `bridge_status.py` | Optional MechaBridge `StatusRequest` probe (game version, online). Silently absent when the `bridge` extra isn't installed or the mod isn't running |
 | `static/` | `index.html`, `app.js`, `store.js`, `panels/*.js`, `style.css`, `vendor/` |
 
@@ -71,7 +73,8 @@ One per replay, built server-side, cached by (path, size, mtime, `SUMMARY_CACHE_
       "fieldedUnitIds": [28, 7, 2],                                  // on the board in any round, deduplicated
       "fightResults": ["Lose", "Win", …],                            // per fight, in order
       "finalHp": 4369,
-      "composition": [ { "round": 1, "supply": 1000, "roles": {"chaff": 0.2, …}, "air": 0.0, "hitsAir": 0.3, "bodies": 30 }, … ]
+      "composition": [ { "round": 1, "supply": 1000, "roles": {"chaff": 0.2, …}, "air": 0.0, "hitsAir": 0.3, "bodies": 30 }, … ],
+      "boards": [ { "round": 1, "unitIds": [28, 7], "technologyIds": [1001] }, … ]  // per fight_over round, deduplicated
     }
   ]
 }
@@ -80,6 +83,7 @@ One per replay, built server-side, cached by (path, size, mtime, `SUMMARY_CACHE_
 - **Specialist:** the id in round 1's `officerIds` whose name (`game_names.json` `officers`) is also an `advanceTeams` name that isn't a unit lineup, i.e. it doesn't start with a digit. If more than one id qualifies, the first one wins. Unknown ids (AsyncBattle) fall back to the first round-1 id with the name `Unknown specialist (<id>)`.
 - **Opening:** `openingLineup.advanceTeamId`, named via `advanceTeams`. `openingLead` is the unit after the leading `"3 "` (`"3 Arclight + 2 Sledgehammer"` → `"Arclight"`). Unknown ids show as `Unknown opening (<id>)`.
 - **Names:** use the `collector/unit_catalog.py` helpers. Unknown ids keep their `Unknown … (<id>)` labels.
+- **Boards:** like `composition`, round r's board is read from record r + 1 (`select_round`), so the last fight's board is missing. `technologyIds` are the active technologies; every technology id belongs to exactly one unit (`unitTechnologies`). `SUMMARY_VERSION` 3 added `boards`.
 
 ### Roles
 
@@ -94,6 +98,28 @@ Average composition of **winning** boards over every summary (all players, not o
 - **overall:** the mean over all winner round-compositions.
 
 `byMode` always holds `Normal` (empty when no summary is Normal), plus every other mode that appears. It's recomputed whenever summaries change. Rounds with `n < 5` are flagged `thin`.
+
+### Insights
+
+What winning boards have and counters (`insights.py`) are computed server-side from the summaries' `boards`, never by re-parsing replays. They cover **every** summary (all players, like the baseline), or only the Local Player's side when asked. Modes never mix.
+- **Round bands:** early (rounds 1–3), mid (4–7), late (8+).
+- **Observation:** one per (match, player, band) with at least one board in the band. It holds the units and technologies on any of the player's boards in the band's rounds, the opponent's units in the same rounds, and whether the player won the match. A unit kept for three rounds counts once; a battle id seen twice counts once.
+- **Winning boards**, per unit and per technology in a band:
+  - **pick rate:** observations with it / all observations in the band;
+  - **win rate when present**, with its **Wilson 95% interval**;
+  - **lift:** that win rate minus the band's baseline win rate (wins / observations, about 50% since both sides count).
+- **Counters:** for my unit X and the opponent's unit Y, my win rate over the observations where I fielded X and they fielded Y. It's compared with my **baseline when they field Y** (all observations where they fielded Y); `delta` is the difference. This is an **observed association, not causal**, and the views say so: who fields a unit, and in which games, also matters.
+- **Minimum sample:** entries with n < 20 (`minN`) are flagged `thin`. Tables sort by lift (or delta), entries at or above the minimum first. The views hide thin entries unless "Show thin" is on, and dim them when shown.
+
+### Recommendations
+
+`recommend.py` reuses `mecha recommend`'s logic (`ActionCatalog.from_game_data()`, `candidate_actions`, the affordability filter, `apply_action`, `rank_actions`) rather than reimplementing it.
+- **When:** on each new `deploying` or `fight_over` frame from round 1, deduplicated on what the ranking uses: round, phase, perspective, offer, and per player the supply, unit ids and levels, technologies and unlocked units. Positions are left out, so dragging a formation doesn't re-rank. A `fight_over` frame needs units on both boards, as predictions do. The ranking runs on its own thread, and only the latest queued frame is ranked.
+- **For whom:** the Local Player, or both players when spectating. Offered cards (`reinforcementOffer`) count only for the Local Player.
+- **Candidates:** buys, unlocks, upgrades, technologies and offered cards; moves are left out. An unlock (`candidate_actions(..., unlocks=True)`) unlocks a locked unit and buys one, costing `unlockSupply` plus `supply`. Rows keep the best placement per unit, and the top 8 are sent.
+- **Position:** a `fight_over` frame passes through `FightOverHistory`, as for predictions. A `deploying` frame borrows the core and supply histories of the same battle's last `fight_over` frame. At a fight's end the next round's income isn't known yet, so the budget is the supply left plus this round's income (`budgetEstimated`).
+- **Model:** the artifact the Visualizer already loads (`--model`), loaded once for both predictions and recommendations. Without it, rows are empty and `modelAvailable` is false, but the counters are still sent.
+- **Counters:** for each unit type on the opponent's board, most supply first, the top 3 of my units with a positive `delta` and n ≥ 20. They use the current round's band and the match's mode. `owned` marks units already on my board.
 
 ### Ratings
 
@@ -117,7 +143,7 @@ Polling starts once the scan is done. A cold first run over a thousand replays t
 
 ## SSE events (`GET /events`)
 
-Each event is `event: <name>` plus `data: <json>`. On connect, the server sends the **catch-up** in this order: `hello`, `summaries`, `baseline`, `ratings`, `status`, then `frame` and `predictions` if a match is current. After that it sends incremental events. The browser store must be rebuildable from the stream alone; on reconnect it replaces state from the next catch-up.
+Each event is `event: <name>` plus `data: <json>`. On connect, the server sends the **catch-up** in this order: `hello`, `summaries`, `baseline`, `ratings`, `status`, then `frame` and `predictions` if a match is current, then `recommendations` once one has been computed. After that it sends incremental events. The browser store must be rebuildable from the stream alone; on reconnect it replaces state from the next catch-up.
 
 | Event | Data |
 | --- | --- |
@@ -130,6 +156,7 @@ Each event is `event: <name>` plus `data: <json>`. On connect, the server sends 
 | `frame` | `{snapshot: <MatchSnapshot v2 JSON>, localIndex: 0 \| 1 \| null, composition: [<composition per player>], boardAsOfLastFight: [bool, bool]}` |
 | `predictions` | `{battleId, rows: [{round, leftWinProbability, swing}]}`: full for the current match. "Left" is the Local Player, or player 0 when spectating |
 | `prediction` | `{battleId, round, leftWinProbability, swing}` |
+| `recommendations` | `{battleId, round, phase, localIndex, modelAvailable, budgetEstimated, counterBand, minSample, note, counterNote, players: [{index, playerId, name, budget, baselineWinProbability, candidates, rows: [{kind: "buy" \| "unlock" \| "upgrade" \| "technology" \| "card", label, unitId?, technologyId?, itemId?, cost, winProbability, gain, description}], counters: [{enemyUnitId, enemyName, n, baselineWinRate, thin, rows: [{unitId, name, n, wins, winRate, interval, delta, thin, owned}]}]}]}`: the latest, full. `gain` is the change in win probability from `baselineWinProbability` |
 | `status` | `{state: "waiting" \| "live" \| "retrying" \| "no_game" \| "layout_mismatch" \| "playback_done" \| "off", detail, gameVersion, bridge: "online" \| "offline" \| "absent", indexing: {done, total} \| null}`. `indexing` is the start-up scan's progress (`total` is null until the files are counted; `done == total` once finished) and null without a replay folder. Sent after each indexing batch |
 | `config` | `{localPlayerId, suggestedPlayerId}`: sent when the Local Player is set and whenever the suggestion changes |
 
@@ -139,17 +166,28 @@ Each event is `event: <name>` plus `data: <json>`. On connect, the server sends 
 - **Frames** are deduplicated like `record_live_snapshots` (ignoring capture time).
 - **Predictions** fire once per (`battleId`, `round`), on the first `fight_over` frame where both boards have units. The snapshot passes through `FightOverHistory` first, exactly as `mecha live-predict` does it. `swing` is the change since the previous round's prediction (0 for the first).
 - **`boardAsOfLastFight[i]`** is true for the opponent during `deploying` while playing.
+- **Recommendations** fire as described in **Recommendations**, a moment after the frame they rank.
+
+## Insight endpoints
+
+Read-only JSON, computed from the current summaries and cached until they change. Bad parameters get `400 {error}`.
+
+| Endpoint | Parameters | Returns |
+| --- | --- | --- |
+| `GET /api/winning-boards` | `mode` (default `Normal`), `versions` (comma-separated `versionKey`s), `from`, `to` (dates), `player` (only that player's side), `minN` (default 20) | `{mode, playerId, minSample, bands: {early \| mid \| late: {rounds: "1-3", n, wins, baselineWinRate, baselineInterval, units: [{unitId, name, n, wins, pickRate, winRate, interval: [lo, hi], lift, thin}], technologies: [{technologyId, name, unitId, unitName, …the same}]}}}` |
+| `GET /api/counters` | The same filters, plus `band` (`all` by default, or `early`, `mid`, `late`), `enemy` (comma-separated unit ids; by default every unit seen, most observed first) and `top` (rows per enemy, default 10; 0 for all) | `{mode, band, playerId, minSample, n, note, enemies: [{enemyUnitId, enemyName, n, baselineWinRate, baselineInterval, thin, rows: [{unitId, name, n, wins, pickRate, winRate, interval, delta, thin}]}]}` |
+| `GET /api/recommendations` | None | `{recommendations: <the latest recommendations payload> \| null}` |
 
 ## Stats view
 
-Built in the browser from `summaries`, `ratings` and `localPlayerId`.
+Built in the browser from `summaries`, `ratings` and `localPlayerId`. Panels 8 and 9 are the exception: they fetch the insight endpoints with the same filters (mode All counts as Normal there).
 - **Which matches count:** summaries containing `localPlayerId`. Until an id is set, a setup card offers the suggested id (with the name it last played under) and a text field.
 - **Filters** (global, applying to every panel): mode (All / Normal / Async), game version (multi-select, default all) and date range (whole days).
 - **Win rates** always show n. Rows with n < 5 are dimmed.
 - **Updates:** a new `summary` recomputes every panel, and the new row slides into Recent matches with a brief highlight (not for rows arriving during indexing).
 - **Indexing:** while `status.indexing` shows the scan running, the top bar shows a small "Indexing replays 12/66" chip, and the panels fill in as rows arrive. The setup card's suggestion follows `config`.
 
-The seven panels:
+The nine panels:
 1. **Record:** games, W–L, win rate, current streak.
 2. **Units:** for each unit, matches fielded, pick rate, and win rate when fielded. Sortable.
 3. **Specialists:** games, W–L, win rate.
@@ -162,6 +200,10 @@ The seven panels:
    - result, rounds
    - a W/L dot strip
    - rating change
+8. **What winning boards have:** per unit or technology (toggle), for one band (Early 1–3 / Mid 4–7 / Late 8+). Columns: n, pick rate, win rate with its 95% interval as a range bar against the baseline tick, and lift. A summary line gives the band's observations, baseline and minimum sample.
+   - **All replays** or **Mine** (the Local Player's side only).
+   - "Show thin" reveals the entries below the minimum sample, dimmed. It applies to panel 9 too.
+9. **Counters:** pick the enemy unit ("They field …", with n), then see my units against it: n, the win rate with its interval against my baseline versus that unit, and the delta. A band toggle: All rounds / 1–3 / 4–7 / 8+. Labelled "Observed association, not causal."
 
 ## Current Match view
 
@@ -177,6 +219,11 @@ The view opens on Stats and auto-switches to Current Match when a match goes liv
 4. **Army value and HP:** per-round lines for both players, from the frames at each fight's end.
 5. **Boards:** each player's units grouped by type, with count, level and a role-coloured chip. Marked "as of last fight" when `boardAsOfLastFight`.
 6. **This round's offer:** `reinforcementOffer` card names, while playing only.
+7. **Recommended purchases:** from `recommendations`, one column per ranked player, left first.
+   - A head line: name, budget ("Est. budget" at a fight's end) and the baseline win probability.
+   - Up to 8 rows: kind, name, supply cost, and Δ win in points with a bar.
+   - "Model unavailable" without a model. A footnote says the ranking is the model's static judgement, with no fight simulated.
+8. **Against their board:** from the same event, for each unit type the opponent fields: "They have Y · my win rate (n)", then chips of my units that did well against it, with the delta and n. ★ marks units already on my board. Labelled "Observed association, not causal", with the band and the minimum sample.
 
 A status banner covers waiting, no game, retrying, layout mismatch and playback done.
 
@@ -195,7 +242,7 @@ Unit icons aren't in v1; use text tiles. Colours are CSS custom properties in on
 Plain HTML, CSS and ES modules, with no build step (ADR 0001):
 - **Vendored:** Legend-State `3.0.0-beta.48` `index.mjs` and Apache ECharts `6.1.0` `dist/echarts.esm.min.js`, in `static/vendor/`. `task vendor` re-downloads them.
 - **Before importing Legend-State**, the page sets `globalThis.process = { env: { NODE_ENV: "production" } }`.
-- **State:** one root observable store, written only by SSE event handlers. Panels render through `observe()` effects.
+- **State:** one root observable store, written only by SSE event handlers. Panels render through `observe()` effects. The Stats insight panels (8 and 9) are the exception: the stream doesn't carry their tables, so they fetch the insight endpoints into panel-local observables, never into the store. They refetch, debounced, when the filters or the summaries change.
 - **Test hooks:** every panel's root element has `data-panel="<name>"`, and renders `data-state="ready" | "empty"`. The e2e tests depend on these.
 
 ## Tests
@@ -208,10 +255,13 @@ Plain HTML, CSS and ES modules, with no build step (ADR 0001):
   - the hub's catch-up order
   - SSE framing
   - playback pacing at speed 0
+  - insight maths: bands, Wilson intervals, pick rate, lift, the minimum-sample rule, counting once per match and band, the counter table, filters, and the cache following the summaries
+  - the recommendations payload with a fake model: local and spectating perspectives, no moves, affordability, the estimated budget, borrowed histories, deduplication, and counters without a model
+  - the insight endpoints and their parameter checks
 - **End-to-end (`tests/e2e/`, pytest marker `e2e`):**
   - The test starts `mecha visualize --no-browser --port 0 --data-dir <tmp> --replay-dir tests/fixtures/replays --playback tests/fixtures/live/playing-match.sample.jsonl --playback-speed 0 --player-id <fixture id>` as a subprocess, then drives it with Playwright on the installed Chrome (`channel="chrome"`, headless).
   - It checks that every Stats panel reaches `ready` with plausible numbers, that the filters change the counts, and that the view auto-switches to Current Match.
-  - It checks the header names, the predictions chart points (or "model unavailable"), the composition bars summing to 100%, and the baseline shown. It also checks no console errors and no requests leave 127.0.0.1.
+  - It checks the header names, the predictions chart points (or "model unavailable"), the composition bars summing to 100%, and the baseline shown. It checks that the insight panels show their samples and the association label, and that Recommended purchases shows rows (or "model unavailable"). It also checks no console errors and no requests leave 127.0.0.1.
   - It skips cleanly when Playwright or Chrome is missing.
 - **Fixtures:**
   - A few small real 1v1 replays from the Local Player's folder.
