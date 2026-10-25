@@ -97,6 +97,16 @@ message CompetitionPageReply {
   int32 state = 5;
   // Server replay paths "<game version>/<numeric id>.rep", deduplicated, in the order the page lists them.
   repeated string replay_paths = 6;
+  // Who won each listed replay, from the ranking's round records. Replays downloaded from the server
+  // leave the final teamRanks empty, so this is the only record of the result.
+  repeated ReplayResult results = 7;
+}
+
+message ReplayResult {
+  string replay_path = 1;
+  // The players' user ids, the same ids a replay's PlayerRecord lists. 0 when the page does not say.
+  uint64 winner_user_id = 2;
+  uint64 loser_user_id = 3;
 }
 
 message DownloadReplayRequest {

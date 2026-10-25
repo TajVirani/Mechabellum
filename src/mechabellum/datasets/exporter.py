@@ -20,7 +20,8 @@ class ExportSummary:
 def export_replay_directory(replay_directory: Path, output_path: Path) -> ExportSummary:
     if not replay_directory.is_dir():
         raise NotADirectoryError(f"Replay directory does not exist: {replay_directory}")
-    paths = sorted(replay_directory.glob("*.grbr"), key=lambda path: path.name.casefold())
+    # Downloaded server replays sit in one subdirectory per game version.
+    paths = sorted(replay_directory.rglob("*.grbr"), key=lambda path: str(path.relative_to(replay_directory)).casefold())
     snapshots: list[MatchSnapshot] = []
     matches = 0
     failures: list[str] = []

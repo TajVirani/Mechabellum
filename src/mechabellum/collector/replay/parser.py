@@ -24,6 +24,7 @@ from ...contracts import (
 )
 from ..unit_catalog import unit_name
 from .extractor import extract_battle_record
+from .result import read_winner_user_id
 
 T = TypeVar("T")
 XSI_TYPE = "{http://www.w3.org/2001/XMLSchema-instance}type"
@@ -123,7 +124,7 @@ def parse_replay(path: Path) -> ReplayMatch:
         map_id=_optional_int(battle_info, "MapID"),
         game_mode=_text(battle_info, "GameMode"),
         match_mode=_text(battle_info, "MatchMode"),
-        winner_index=_winner_index(root, len(players)),
+        winner_index=_winner_index(root, players, path),
         players=players,
         reinforcement_offers=_reinforcement_offers(root),
     )
@@ -380,19 +381,20 @@ def _fight_result(value: str | None) -> FightResult | None:
     return FIGHT_RESULTS.get((value or "").strip().lower())
 
 
-def _winner_index(root: ElementTree.Element, player_count: int) -> int | None:
-    """The player ranked 0 in the final teamRanks.
+def _winner_index(root: ElementTree.Element, players: list[PlayerHistory], path: Path) -> int | None:
+    """The player ranked 0 in the final teamRanks, or else the winner a result file next to the replay names.
 
     Fight report scores cannot be used: the MatchSnapshotData for round r reports fight r - 1, so the last one
-    describes the second-to-last fight and the deciding fight has no report.
+    describes the second-to-last fight and the deciding fight has no report. Replays downloaded from the server
+    leave teamRanks empty; `mecha fetch-replays` writes their result file from the tournament ranking.
     """
     snapshots = root.findall("./matchDatas/MatchSnapshotData")
-    if not snapshots:
-        return None
-    ranks = [_int_text(item) for item in snapshots[-1].findall("./teamRanks/int")]
-    if len(ranks) != player_count or ranks.count(0) != 1:
-        return None
-    return ranks.index(0)
+    ranks = [_int_text(item) for item in snapshots[-1].findall("./teamRanks/int")] if snapshots else []
+    if len(ranks) == len(players) and ranks.count(0) == 1:
+        return ranks.index(0)
+    winner = read_winner_user_id(path)
+    matches = [index for index, player in enumerate(players) if winner is not None and player.player_id == winner]
+    return matches[0] if len(matches) == 1 else None
 
 
 def _text(parent: ElementTree.Element | None, name: str) -> str | None:

@@ -107,20 +107,32 @@ class CompetitionPageRequest(_message.Message):
     def __init__(self, competition_id: _Optional[int] = ..., sub_id: _Optional[int] = ..., page: _Optional[int] = ...) -> None: ...
 
 class CompetitionPageReply(_message.Message):
-    __slots__ = ("competition_id", "sub_id", "page", "page_count", "state", "replay_paths")
+    __slots__ = ("competition_id", "sub_id", "page", "page_count", "state", "replay_paths", "results")
     COMPETITION_ID_FIELD_NUMBER: _ClassVar[int]
     SUB_ID_FIELD_NUMBER: _ClassVar[int]
     PAGE_FIELD_NUMBER: _ClassVar[int]
     PAGE_COUNT_FIELD_NUMBER: _ClassVar[int]
     STATE_FIELD_NUMBER: _ClassVar[int]
     REPLAY_PATHS_FIELD_NUMBER: _ClassVar[int]
+    RESULTS_FIELD_NUMBER: _ClassVar[int]
     competition_id: int
     sub_id: int
     page: int
     page_count: int
     state: int
     replay_paths: _containers.RepeatedScalarFieldContainer[str]
-    def __init__(self, competition_id: _Optional[int] = ..., sub_id: _Optional[int] = ..., page: _Optional[int] = ..., page_count: _Optional[int] = ..., state: _Optional[int] = ..., replay_paths: _Optional[_Iterable[str]] = ...) -> None: ...
+    results: _containers.RepeatedCompositeFieldContainer[ReplayResult]
+    def __init__(self, competition_id: _Optional[int] = ..., sub_id: _Optional[int] = ..., page: _Optional[int] = ..., page_count: _Optional[int] = ..., state: _Optional[int] = ..., replay_paths: _Optional[_Iterable[str]] = ..., results: _Optional[_Iterable[_Union[ReplayResult, _Mapping]]] = ...) -> None: ...
+
+class ReplayResult(_message.Message):
+    __slots__ = ("replay_path", "winner_user_id", "loser_user_id")
+    REPLAY_PATH_FIELD_NUMBER: _ClassVar[int]
+    WINNER_USER_ID_FIELD_NUMBER: _ClassVar[int]
+    LOSER_USER_ID_FIELD_NUMBER: _ClassVar[int]
+    replay_path: str
+    winner_user_id: int
+    loser_user_id: int
+    def __init__(self, replay_path: _Optional[str] = ..., winner_user_id: _Optional[int] = ..., loser_user_id: _Optional[int] = ...) -> None: ...
 
 class DownloadReplayRequest(_message.Message):
     __slots__ = ("replay_path",)

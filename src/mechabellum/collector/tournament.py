@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol, TypeVar
 
+from .replay.result import result_path, write_result
+
 ENDED_STATE = 5
 DEFAULT_STOP_AFTER = 10
 
@@ -24,6 +26,7 @@ class FetchSummary:
     downloaded: int = 0
     present: int = 0
     skipped_version: int = 0
+    labeled: int = 0
     stop_reason: str = ""
     failed: bool = False
 
@@ -40,6 +43,8 @@ def fetch_replays(
 
     `stop_after=None` walks to the version boundary regardless, which resumes an interrupted backfill.
     Replays of versions that were not requested are skipped and do not count toward the streak.
+    Each replay of a requested version gets a result file naming its winner, which the parser reads because
+    server replays leave the final ranks empty; replays that already have one keep it.
     A failed request is retried once; a second failure stops the run with `failed` set.
     """
     wanted: dict[str, tuple[int, ...]] = {}
@@ -73,7 +78,7 @@ def _walk(
     seen: set[str] = set()
     for competition in _competitions(bridge):
         for sub_id in competition.sub_ids:
-            for path in _replay_paths(bridge, competition.id, sub_id):
+            for path, result in _replay_paths(bridge, competition.id, sub_id):
                 if path in seen:
                     continue
                 seen.add(path)
@@ -84,10 +89,13 @@ def _walk(
                 if version not in wanted:
                     summary.skipped_version += 1
                     continue
-                downloaded = (
-                    not (replay_directory / version / f"{file_name}.grbr").is_file()
-                    and _retry(lambda path=path: bridge.download_replay(path)).downloaded
-                )
+                target = replay_directory / version / f"{file_name}.grbr"
+                downloaded = not target.is_file() and _retry(lambda path=path: bridge.download_replay(path)).downloaded
+                if result is not None and result.winner_user_id and not result_path(target).is_file():
+                    write_result(
+                        target, result.winner_user_id, result.loser_user_id, f"tournament {competition.id}/{sub_id}"
+                    )
+                    summary.labeled += 1
                 if downloaded:
                     summary.downloaded += 1
                     streak = 0
@@ -114,14 +122,17 @@ def _competitions(bridge: TournamentBridge) -> list[Any]:
     return sorted(by_id.values(), key=lambda competition: (competition.start_time, competition.id), reverse=True)
 
 
-def _replay_paths(bridge: TournamentBridge, competition_id: int, sub_id: int) -> Iterator[str]:
+def _replay_paths(bridge: TournamentBridge, competition_id: int, sub_id: int) -> Iterator[tuple[str, Any]]:
+    """Each replay path with its result, or None when the mod did not report one (older mod builds)."""
     page, page_count = 1, 1
     while page <= page_count:
         reply = _retry(lambda page=page: bridge.competition_page(competition_id, sub_id, page))
         if reply.state != ENDED_STATE:
             return
         page_count = reply.page_count
-        yield from reply.replay_paths
+        results = {result.replay_path: result for result in reply.results}
+        for path in reply.replay_paths:
+            yield path, results.get(path)
         page += 1
 
 
