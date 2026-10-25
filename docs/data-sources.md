@@ -31,7 +31,14 @@ The game keeps replays in `<game>\ProjectDatas\Replay`:
 
 `mecha probe` and the commands that default to the replay directory find it from the running `Mechabellum.exe` or the Steam library (`collector/locator.py`). `fetch-replays` uses the directory the mod reports (`FileUtility.ReplayDirectoryFullPath`), which is the same folder. `export-dataset` and `dataset-stats` read the whole tree, so fetched replays are included; `latest` only looks at the top level, so it shows the last match you played or spectated, not the last download. A match saved in both places is counted once, by battle id.
 
-Tournament replays have `GameMode` `Competition` (the game's word for tournaments; the bridge protocol keeps it). Their final `teamRanks` are empty, so they name no winner: `export-dataset` leaves them out and reports how many 1v1 matches it skipped for that, and `dataset-stats` lists them as `no winner`. Their rounds still parse, so `dump` and `parse` work on them. Deriving their winners is an open TODO item.
+Tournament replays have `GameMode` `Competition` (the game's word for tournaments; the bridge protocol keeps it). The replay file does not record the winner. Checked on all 1,033 tournament replays of 2.0.0.4.2331 (828 of them 1v1):
+
+- `teamRanks` is empty in every `MatchSnapshotData`, and no `MatchSnapshotData` has `lastFightResult` reports;
+- `roundFightResult` is empty, and `preRoundFightResult` is `Win` for both players in every round of every 1v1 replay, so it is only a default value;
+- the last round record is written before the deciding fight, as in every replay, so no reactor core reaches 0;
+- the game's protobuf copy of the download, saved next to it as `<id>.rep.bak`, ends at the same round record and has no result field either.
+
+So `export-dataset` leaves them out and reports how many 1v1 matches it skipped for that, and `dataset-stats` lists them as `no winner`. Their rounds still parse, so `dump` and `parse` work on them. The winner is in the tournament history instead: each `RoundRecord` that `RequestHistoryMatchDetail` returns has `Win`, `MyHp`, `EnemyHp` and the `ReplayPath`. Having the mod attach that result to the downloads is an open TODO item.
 
 ## Live data
 
