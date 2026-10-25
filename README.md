@@ -94,6 +94,8 @@ Train a model and view round-by-round win probabilities for a match:
 .venv\Scripts\mecha evaluate data\held-out.jsonl --model artifacts\win_model.joblib
 ```
 
+`--feature-schema 3` (opt-in; schema 2 stays the default) adds positioning style labels (Aggro / Standard / Defense, side-stack, diagonal, flank, screened or exposed carries, layered chaff, death ball, Headbutt and Crossfire) and role-aware continuous features from `features/style.py`. On the 2.0 tournament data it does not beat schema 2 (docs/experiments.md, 2026-10-25). `predict`, `evaluate` and `live-predict` load either schema's linear model.
+
 With the `deep` extra (`pip install -e ".[ml,deep]"`), train a token model over individual formations instead: Deep Sets, a Transformer that attends across both armies, or a GNN over the board's nearest-neighbour graph. `predict`, `evaluate`, `timeline` and `live-predict` accept the resulting `.pt` file wherever they take a model:
 
 ```powershell

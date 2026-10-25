@@ -1,4 +1,4 @@
-"""Feature schema 2: a player-symmetric description of a fight_over position.
+"""Feature schemas 2 (the default) and 3: a player-symmetric description of a fight_over position.
 
 Every feature is "perspective player minus opponent" unless noted, so swapping perspectives negates the vector.
 Values a source cannot provide are never silently zero: each such input contributes a `*_known` mask, set when
@@ -18,6 +18,7 @@ import numpy as np
 
 from ..contracts import MatchSnapshot, PlayerSnapshot
 from .geometry import BANDS, LANES, UnitToken, band, lane, unit_tokens
+from .style import BoardStyle, board_style, crossfire, headbutt, owner_frame
 
 FEATURE_SCHEMA_VERSION = 2
 UNIT_IDS = (*range(1, 33), 2002)
@@ -391,21 +392,151 @@ _FEATURES = _feature_list()
 _ROUND_SCALED = ("core_share_diff", "investment_share_diff", "previous_fight_diff", "formation_count_diff")
 
 
-def feature_names() -> list[str]:
-    return [feature.name for feature in _FEATURES] + [f"log_round_x_{name}" for name in _ROUND_SCALED]
+# ---- feature schema 3: positioning style ------------------------------------------------------------------------
+#
+# Schema 3 is schema 2 computed in a corrected frame (`unit_tokens(main_region_frame=True)`: flank formations no
+# longer vote on which half a player holds) plus the style features below, each from `features/style.py`.
 
 
-# Context features describe both players at once (masks, lane gaps), so they are equal from either perspective.
-SYMMETRIC_FEATURES = frozenset(name for name in feature_names() if name.endswith(("_known", "_gap", "_contested")))
+@dataclass(frozen=True)
+class _StyleFeature:
+    name: str
+    compute: Callable[[BoardStyle, BoardStyle, dict[str, float]], float]
 
 
-def build_features(snapshot: MatchSnapshot, perspective: int = 0) -> np.ndarray:
+def _style_diff(value: Callable[[BoardStyle], float]) -> Callable[[BoardStyle, BoardStyle, dict[str, float]], float]:
+    return lambda own, other, _: value(own) - value(other)
+
+
+def _optional_style(
+    value: Callable[[BoardStyle], float | None],
+) -> tuple[Callable[[BoardStyle, BoardStyle, dict[str, float]], float], Callable[..., float]]:
+    """A style difference defined only when both boards have the value, plus its mask, as `_optional_diff`."""
+
+    def known(own: BoardStyle, other: BoardStyle, _: dict[str, float]) -> float:
+        return float(value(own) is not None and value(other) is not None)
+
+    def difference(own: BoardStyle, other: BoardStyle, values: dict[str, float]) -> float:
+        if not known(own, other, values):
+            return 0.0
+        return float(value(own) or 0.0) - float(value(other) or 0.0)
+
+    return difference, known
+
+
+def _is(field: str, label: str) -> Callable[[BoardStyle], float]:
+    return lambda style: float(getattr(style, field) == label)
+
+
+def _optional_is(field: str, label: str) -> Callable[[BoardStyle], float | None]:
+    def value(style: BoardStyle) -> float | None:
+        item = getattr(style, field)
+        return None if item is None else float(item == label)
+
+    return value
+
+
+def _style_label_features() -> list[_StyleFeature]:
+    features = [
+        _StyleFeature("style_aggro_diff", _style_diff(_is("depth_style", "aggro"))),
+        _StyleFeature("style_defense_diff", _style_diff(_is("depth_style", "defense"))),
+        _StyleFeature("lateral_side_diff", _style_diff(_is("lateral_style", "side"))),
+        _StyleFeature("lateral_diagonal_diff", _style_diff(_is("lateral_style", "diagonal"))),
+        _StyleFeature("flanking_diff", _style_diff(lambda style: float(style.flanking))),
+        _StyleFeature("gospel_flank_diff", _style_diff(lambda style: float(style.gospel_flank))),
+    ]
+    optional: list[tuple[str, Callable[[BoardStyle], float | None]]] = [
+        ("screened", _optional_is("screen_style", "screened")),
+        ("exposed", _optional_is("screen_style", "exposed")),
+        ("layered", _optional_is("layered", True)),
+        ("death_ball", _optional_is("death_ball", True)),
+    ]
+    for name, value in optional:
+        difference, known = _optional_style(value)
+        features.append(_StyleFeature(f"{name}_diff", difference))
+        features.append(_StyleFeature(f"{name}_known", known))
+    # Pairwise styles are the same from both sides; their products with the army share difference are not.
+    features += [
+        _StyleFeature("headbutt", lambda own, other, _: float(headbutt(own, other))),
+        _StyleFeature("crossfire", lambda own, other, _: float(crossfire(own, other))),
+        _StyleFeature(
+            "headbutt_x_investment_share_diff",
+            lambda own, other, values: float(headbutt(own, other)) * values["investment_share_diff"],
+        ),
+        _StyleFeature(
+            "crossfire_x_investment_share_diff",
+            lambda own, other, values: float(crossfire(own, other)) * values["investment_share_diff"],
+        ),
+    ]
+    return features
+
+
+def _style_continuous_features() -> list[_StyleFeature]:
+    features = [
+        _StyleFeature("flank_share_diff", _style_diff(lambda style: style.flank_share)),
+        _StyleFeature("forward_share_diff", _style_diff(lambda style: style.forward_share)),
+        _StyleFeature("behind_tower_share_diff", _style_diff(lambda style: style.rear_share)),
+        _StyleFeature("side_lane_share_diff", _style_diff(lambda style: style.side_share)),
+        _StyleFeature("lateral_offset_diff", _style_diff(lambda style: abs(style.mean_x))),
+    ]
+    optional: list[tuple[str, Callable[[BoardStyle], float | None]]] = [
+        ("rotated_share", lambda style: style.rotated_share),
+        ("diagonal_front_gap", lambda style: style.diagonal_gap),
+        ("screen_depth_gap", lambda style: style.screen_gap),
+        ("chaff_layering", lambda style: style.chaff_layering),
+        ("damage_compactness", lambda style: style.damage_compactness),
+    ]
+    for name, value in optional:
+        difference, known = _optional_style(value)
+        features.append(_StyleFeature(f"{name}_diff", difference))
+        features.append(_StyleFeature(f"{name}_known", known))
+    return features
+
+
+_STYLE_LABELS = _style_label_features()
+_STYLE_CONTINUOUS = _style_continuous_features()
+STYLE_LABEL_FEATURES = tuple(feature.name for feature in _STYLE_LABELS)
+STYLE_CONTINUOUS_FEATURES = tuple(feature.name for feature in _STYLE_CONTINUOUS)
+SUPPORTED_FEATURE_SCHEMAS = (2, 3)
+
+
+def _check_schema(schema: int) -> None:
+    if schema not in SUPPORTED_FEATURE_SCHEMAS:
+        raise ValueError(f"Unknown feature schema {schema}; supported: {SUPPORTED_FEATURE_SCHEMAS}.")
+
+
+def feature_names(schema: int = FEATURE_SCHEMA_VERSION) -> list[str]:
+    _check_schema(schema)
+    names = [feature.name for feature in _FEATURES] + [f"log_round_x_{name}" for name in _ROUND_SCALED]
+    if schema >= 3:
+        names += [*STYLE_LABEL_FEATURES, *STYLE_CONTINUOUS_FEATURES]
+    return names
+
+
+def symmetric_features(schema: int = FEATURE_SCHEMA_VERSION) -> frozenset[str]:
+    """Context features describe both players at once (masks, lane gaps, pairwise styles): equal from either side."""
+    return frozenset(
+        name
+        for name in feature_names(schema)
+        if name.endswith(("_known", "_gap", "_contested")) or name in ("headbutt", "crossfire")
+    )
+
+
+SYMMETRIC_FEATURES = symmetric_features()
+
+
+def build_features(snapshot: MatchSnapshot, perspective: int = 0, schema: int = FEATURE_SCHEMA_VERSION) -> np.ndarray:
     if len(snapshot.players) != 2:
         raise ValueError("The win probability model only supports two-player positions.")
     if perspective not in (0, 1):
         raise ValueError("perspective must be 0 or 1.")
-    tokens = unit_tokens(snapshot, perspective)
+    _check_schema(schema)
+    tokens = unit_tokens(snapshot, perspective, main_region_frame=schema >= 3)
     values = {feature.name: feature.compute(snapshot, perspective, tokens) for feature in _FEATURES}
     round_scale = math.log1p(max(1, snapshot.match.round))
     scaled = [round_scale * values[name] for name in _ROUND_SCALED]
-    return np.asarray([*values.values(), *scaled], dtype=np.float64)
+    style: list[float] = []
+    if schema >= 3:
+        own, other = (board_style(owner_frame(_side(tokens, side))) for side in (0, 1))
+        style = [feature.compute(own, other, values) for feature in (*_STYLE_LABELS, *_STYLE_CONTINUOUS)]
+    return np.asarray([*values.values(), *scaled, *style], dtype=np.float64)

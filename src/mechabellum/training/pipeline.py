@@ -15,7 +15,7 @@ from sklearn.preprocessing import StandardScaler
 
 from ..contracts import MATCH_SNAPSHOT_SCHEMA_VERSION, MODEL_SNAPSHOT_PHASE
 from ..datasets import load_training_snapshots
-from ..features import FEATURE_SCHEMA_VERSION, feature_names
+from ..features import FEATURE_SCHEMA_VERSION, SUPPORTED_FEATURE_SCHEMAS, feature_names
 from ..models import create_artifact, save_artifact
 from .calibration import CalibratedModel
 from .evaluation import EvaluationRows, evaluation_report
@@ -34,14 +34,17 @@ def train_model(
     split: SplitMode = "group",
     calibration: CalibrationMethod = "none",
     calibration_size: float = 0.2,
+    feature_schema: int = FEATURE_SCHEMA_VERSION,
 ) -> dict[str, object]:
     """Train the win model.
 
     `split="group"` holds out random whole matches; `split="time"` holds out the newest matches by battle id, so
     the test set measures performance on games played after the training data. With calibration, a further slice
     of matches (the newest before the test set, for a time split) fits a sigmoid or isotonic map on top of the
-    trained model.
+    trained model. `feature_schema=3` adds the positioning style features (opt-in; 2 stays the default).
     """
+    if feature_schema not in SUPPORTED_FEATURE_SCHEMAS:
+        raise ValueError(f"Unknown feature schema {feature_schema}; supported: {SUPPORTED_FEATURE_SCHEMAS}.")
     dataset_path = dataset_path.resolve()
     snapshots = load_training_snapshots(dataset_path)
     battle_ids = {snapshot.match.battle_id for snapshot in snapshots}
@@ -50,7 +53,7 @@ def train_model(
     if len(battle_ids) < 10:
         raise ValueError(f"Only {len(battle_ids)} usable 1v1 matches; at least 10 are required for a validation split.")
 
-    rows = EvaluationRows.from_snapshots(snapshots)
+    rows = EvaluationRows.from_snapshots(snapshots, feature_schema)
     fit_indices, test_indices = split_matches(rows.battle_ids, test_size, split, seed)
     calibration_indices = np.asarray([], dtype=int)
     if calibration != "none":
@@ -75,14 +78,14 @@ def train_model(
     if calibration != "none":
         report["uncalibrated"] = evaluation_report(test, model.predict_proba(test.x)[:, 1])["metrics"]
 
-    save_artifact(output_path, create_artifact(final_model, feature_names()))
+    save_artifact(output_path, create_artifact(final_model, feature_names(feature_schema), feature_schema))
 
     metadata: dict[str, object] = {
         "createdAtUtc": datetime.now(UTC).isoformat(),
         "datasetPath": str(dataset_path),
         "datasetSha256": hashlib.sha256(dataset_path.read_bytes()).hexdigest().upper(),
         "matchSnapshotSchemaVersion": MATCH_SNAPSHOT_SCHEMA_VERSION,
-        "featureSchemaVersion": FEATURE_SCHEMA_VERSION,
+        "featureSchemaVersion": feature_schema,
         "snapshotPhase": MODEL_SNAPSHOT_PHASE,
         "split": split,
         "calibration": calibration,

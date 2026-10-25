@@ -8,7 +8,7 @@ import numpy as np
 from sklearn.metrics import accuracy_score, brier_score_loss, log_loss, roc_auc_score
 
 from ..contracts import MatchSnapshot
-from ..features import build_features
+from ..features import FEATURE_SCHEMA_VERSION, build_features
 
 RATING_TIER_WIDTH = 250
 CALIBRATION_BINS = 10
@@ -25,7 +25,9 @@ class EvaluationRows:
     perspectives: np.ndarray
 
     @classmethod
-    def from_snapshots(cls, snapshots: Sequence[MatchSnapshot]) -> EvaluationRows:
+    def from_snapshots(
+        cls, snapshots: Sequence[MatchSnapshot], feature_schema: int = FEATURE_SCHEMA_VERSION
+    ) -> EvaluationRows:
         rows: list[np.ndarray] = []
         labels: list[int] = []
         battle_ids: list[str] = []
@@ -35,7 +37,7 @@ class EvaluationRows:
             if snapshot.outcome is None or snapshot.match.battle_id is None:
                 raise ValueError("Snapshot is missing outcome or match.battleId.")
             for perspective in (0, 1):
-                rows.append(build_features(snapshot, perspective))
+                rows.append(build_features(snapshot, perspective, feature_schema))
                 labels.append(int(perspective == snapshot.outcome.winner_index))
                 battle_ids.append(snapshot.match.battle_id)
                 expanded.append(snapshot)

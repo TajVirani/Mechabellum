@@ -153,6 +153,13 @@ def _parser() -> argparse.ArgumentParser:
     train.add_argument(
         "--calibration-size", type=float, default=0.2, help="Share of training matches used for calibration."
     )
+    train.add_argument(
+        "--feature-schema",
+        type=int,
+        choices=(2, 3),
+        default=2,
+        help="Feature schema; 3 adds positioning style labels and role-aware features (opt-in).",
+    )
 
     deep = _command(
         commands,
@@ -540,6 +547,7 @@ def _train(args: argparse.Namespace) -> None:
         split=args.split,
         calibration=args.calibration,
         calibration_size=args.calibration_size,
+        feature_schema=args.feature_schema,
     )
     print(json.dumps(metadata, ensure_ascii=False, indent=2))
 
