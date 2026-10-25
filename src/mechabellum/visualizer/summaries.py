@@ -12,7 +12,7 @@ from typing import Any
 
 from ..collector.memory.layouts import SUPPORTED_LAYOUTS
 from ..collector.replay import parse_replay
-from ..collector.replay.parser import PlayerHistory, ReplayMatch
+from ..collector.replay.parser import PlayerHistory, PlayerRound, ReplayMatch
 from ..collector.unit_catalog import (
     ADVANCE_TEAM_NAMES,
     GAME_NAMES_VERSION,
@@ -24,7 +24,7 @@ from ..contracts import FightResult
 from .roles import board_composition
 
 # Bump whenever the summary shape or its rules change; cached summaries of another version are rebuilt.
-SUMMARY_VERSION = 2
+SUMMARY_VERSION = 3
 
 # Specialists are the officers whose name is also a non-lineup advance team ("Supply Specialist", not "3 Fang + ...").
 SPECIALIST_IDS: frozenset[int] = frozenset(
@@ -150,6 +150,7 @@ def _player(replay: ReplayMatch, player: PlayerHistory, won: bool, last_round: i
         board_composition(player.rounds[round_number + 1].units, round_number)
         for round_number in replay.snapshot_rounds
     ]
+    boards = [board_contents(player.rounds[round_number + 1], round_number) for round_number in replay.snapshot_rounds]
     last = player.rounds.get(last_round)
     return {
         "playerId": player.player_id,
@@ -164,7 +165,20 @@ def _player(replay: ReplayMatch, player: PlayerHistory, won: bool, last_round: i
         "fightResults": fight_results(player, won, last_round),
         "finalHp": None if last is None else last.reactor_core,
         "composition": composition,
+        "boards": boards,
     }
+
+
+def board_contents(state: PlayerRound, round_number: int) -> dict[str, Any]:
+    """What one fight_over board held: unit ids and active technology ids, each deduplicated in board order.
+
+    Like `composition`, round r's board is read from record r + 1 (see `select_round`).
+    """
+    unit_ids = list(dict.fromkeys(unit.unit_id for unit in state.units))
+    technology_ids = list(
+        dict.fromkeys(technology for item in state.active_technologies for technology in item.technology_ids)
+    )
+    return {"round": round_number, "unitIds": unit_ids, "technologyIds": technology_ids}
 
 
 def fight_results(player: PlayerHistory, won: bool, last_round: int) -> list[FightResult]:

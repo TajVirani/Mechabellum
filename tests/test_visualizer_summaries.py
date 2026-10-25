@@ -104,3 +104,17 @@ def test_battle_date_and_game_version_fallbacks(tmp_path: Path) -> None:
     assert game_version(top, 9999, tmp_path) is None
     assert game_version(tmp_path / "2.0.0.6.2350" / "x.grbr", 2350, tmp_path) == "2.0.0.6.2350"
     assert game_version(tmp_path / "misc" / "x.grbr", None, tmp_path) is None
+
+
+def test_boards_list_unit_and_technology_ids_per_fight_over_round() -> None:
+    summary = summarize_replay(REPLAYS / "2331_20261022--67509180_[Sleep Deprived]VS[miro].grbr", REPLAYS)
+
+    for player in summary["players"]:
+        boards = player["boards"]
+        assert [board["round"] for board in boards] == [item["round"] for item in player["composition"]]
+        for board in boards:
+            assert board["unitIds"] and len(board["unitIds"]) == len(set(board["unitIds"]))
+            assert len(board["technologyIds"]) == len(set(board["technologyIds"]))
+        fielded = {unit for board in boards for unit in board["unitIds"]}
+        assert fielded <= set(player["fieldedUnitIds"])
+    assert any(board["technologyIds"] for player in summary["players"] for board in player["boards"])

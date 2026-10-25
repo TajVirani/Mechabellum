@@ -60,6 +60,8 @@ class Hub:
         self._live_source = live_source
         self._local_player_id = local_player_id
         self._summaries: dict[str, dict[str, Any]] = {}
+        # Bumped whenever the summary set changes, so derived tables (insights.py) know when to recompute.
+        self._generation = 0
         self._suggested: str | None = None
         self._baseline: dict[str, Any] = compute_baseline([])
         self._ratings: dict[str, dict[str, int]] = {}
@@ -95,6 +97,11 @@ class Hub:
     def summaries(self) -> list[dict[str, Any]]:
         with self._lock:
             return self._sorted_summaries()
+
+    def summaries_snapshot(self) -> tuple[int, list[dict[str, Any]]]:
+        """(generation, summaries): the generation changes whenever the summary set does."""
+        with self._lock:
+            return self._generation, list(self._summaries.values())
 
     def catch_up(self) -> list[tuple[str, Any]]:
         with self._lock:
@@ -252,6 +259,7 @@ class Hub:
     def _summaries_changed(self) -> bool:
         """Recompute the baseline and the suggestion; True when the suggested player changed."""
         before = self._suggested
+        self._generation += 1
         self._baseline = compute_baseline(self._summaries.values())
         self._suggested = suggest_player_id(self._summaries.values())
         return self._suggested != before
