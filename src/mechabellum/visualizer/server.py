@@ -201,6 +201,12 @@ class _Server(ThreadingHTTPServer):
     allow_reuse_address = False
     visualizer: Visualizer
 
+    def handle_error(self, request: Any, client_address: Any) -> None:
+        # Browsers drop idle keep-alive and event-stream connections; that is not an error.
+        if isinstance(sys.exc_info()[1], ConnectionError):
+            return
+        super().handle_error(request, client_address)
+
 
 class _Handler(BaseHTTPRequestHandler):
     server: _Server
