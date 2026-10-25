@@ -38,7 +38,9 @@ Tournament replays have `GameMode` `Competition` (the game's word for tournament
 - the last round record is written before the deciding fight, as in every replay, so no reactor core reaches 0;
 - the game's protobuf copy of the download, saved next to it as `<id>.rep.bak`, ends at the same round record and has no result field either.
 
-So `export-dataset` leaves them out and reports how many 1v1 matches it skipped for that, and `dataset-stats` lists them as `no winner`. Their rounds still parse, so `dump` and `parse` work on them. The winner is in the tournament history instead: each `RoundRecord` that `RequestHistoryMatchDetail` returns has `Win`, `MyHp`, `EnemyHp` and the `ReplayPath`. Having the mod attach that result to the downloads is an open TODO item.
+The winner is in the tournament history instead: each `RoundRecord` that `RequestHistoryMatchDetail` returns has `Win`, `MyHp`, `EnemyHp` and the `ReplayPath`. A replay is listed once per player, so the mod takes the winner's and loser's user ids from `Win` and reports them with the replay paths. `fetch-replays` writes them to `<id>.rep.result.json` next to the replay (`winner_user_id`, `loser_user_id`, and the tournament as `source`) and keeps a result file that already exists (`collector/replay/result.py`). When the final `teamRanks` are empty, the parser takes the player whose id matches `winner_user_id`, so `export-dataset` trains on these replays.
+
+A replay without a result file (downloaded before result files existed, or by a mod build that does not report results) still has no winner: `export-dataset` leaves it out and reports how many 1v1 matches it skipped for that, and `dataset-stats` lists it as `no winner`. `fetch-replays` writes the missing file for every replay it passes that is already on disk, so `fetch-replays --full` labels a whole backfill. The rounds parse either way, so `dump` and `parse` work on every tournament replay.
 
 ## Live data
 

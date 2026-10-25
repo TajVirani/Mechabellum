@@ -131,7 +131,7 @@ Download past tournament replays, newest first, through the [MechaBridge mod](mo
 .venv\Scripts\mecha fetch-replays --versions 2.0.0.5.2340 2.0.0.4.2331
 ```
 
-`--full` ignores the 10-in-a-row rule and walks to the oldest requested version, skipping replays already on disk; use it to resume a backfill that was interrupted. A version is the game version followed by the replay format, as the game names its download folders. Downloads land in `Replay\<version>\` under the replay directory, where `export-dataset` and `dataset-stats` find them; tournament replay files do not record the winner (it is in the tournament history; see docs/data-sources.md), so `export-dataset` counts them but cannot train on them yet.
+`--full` ignores the 10-in-a-row rule and walks to the oldest requested version, skipping replays already on disk; use it to resume a backfill that was interrupted. A version is the game version followed by the replay format, as the game names its download folders. Downloads land in `Replay\<version>\` under the replay directory, where `export-dataset` and `dataset-stats` find them; tournament replay files do not record the winner, so `fetch-replays` also writes it from the tournament history to `<id>.rep.result.json` next to each replay, and `export-dataset` trains on the replays that have one (see docs/data-sources.md). A run writes the missing result file for every replay it passes that is already on disk, so run `--full` once to label replays downloaded before result files existed.
 
 All commands and options are listed by `.venv\Scripts\mecha --help` and each subcommand's `--help`.
 

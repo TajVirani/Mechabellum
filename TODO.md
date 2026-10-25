@@ -9,7 +9,7 @@
 - [x] Train a player-symmetric probability baseline and support `live-predict` inference
 - [x] Time-split training (`--split time`) and probability calibration (`--calibration sigmoid|isotonic`)
 - [ ] Accumulate at least 5,000 same-version 1v1 matches so time-split calibration has enough data
-- [ ] Label tournament (`Competition`) replays from `mecha fetch-replays` with the winner from the tournament history: the replay file does not record it (empty `teamRanks`, no record after the deciding fight), so the mod attaches `RoundRecord.Win` from `RequestHistoryMatchDetail` to each download, with `MyHp` / `EnemyHp` as a fallback
+- [x] Label tournament (`Competition`) replays from `mecha fetch-replays` with the winner from the tournament history (the replay file does not record it; the mod reports `RoundRecord.Win` from `RequestHistoryMatchDetail`, `fetch-replays` writes it to `<id>.rep.result.json`, and the parser reads that file when `teamRanks` is empty)
 - [x] Add evaluation reports broken down by round, map, rank tier, and version (`mecha evaluate`; replays carry no rating, so rank tiers need live recordings)
 - [x] Read live player phase and predict once per round when both players reach `FightOver`
 - [x] Add a stable JSONL recorder for live snapshots, with timestamps (`mecha live-record`)

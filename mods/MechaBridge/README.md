@@ -9,7 +9,7 @@ Every request runs on Unity's main thread and calls the functions the tournament
 | Request | Game calls |
 | --- | --- |
 | `ListCompetitionsRequest` | `Protos.Match.RequestHistoryMatch { page }`, sent through the game's `MessageCenterV2.SendMsg`. The window only ever sends this message empty (page 1), and `CompetitionProxy.RequestHistoryMatch()` drops repeats during a resend cooldown, so the mod builds it with the page set. Pages start at 1. On page 1 also `RequestMatchList(1, 1)` for ended mini tournaments, read from `CompetitionController.Instance.C_SystemData.C_MatchListData.MatchBaseInfos` |
-| `CompetitionPageRequest` | `CompetitionProxy.RequestHistoryMatchDetail(id, subId, page)` |
+| `CompetitionPageRequest` | `CompetitionProxy.RequestHistoryMatchDetail(id, subId, page)`. The reply lists each replay path once, with the winner's and loser's user ids from the ranking's `RoundRecord.Win` |
 | `DownloadReplayRequest` | `ReplayProxy.DowloadServerReplay(path)`, then the replay is saved through `FileUtility.SaveBinary` to `Replay\<version>\<id>.rep.grbr`, where the window's download button saves it |
 
 Replies are read by Harmony prefixes on `OnResponseHistoryMatch`, `OnResponseHistoryMatchDetail` and `OnResponseMatchList`; they copy the data and let the game's handler run unchanged. Requests that reach the game's servers are spaced at least `ServerRequestIntervalMs` apart (default 1500 ms), and run one at a time. The mod never sends game data of its own.
