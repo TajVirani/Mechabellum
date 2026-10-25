@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import math
 import threading
+import time
 from pathlib import Path
 
 from mechabellum.contracts import MatchSnapshot
@@ -190,3 +191,28 @@ def test_worker_thread_sends_the_latest_frame() -> None:
     stop.set()
     worker.join(5)
     assert hub.recommendations["round"] == 2
+
+
+def test_counters_are_refreshed_when_the_summaries_change() -> None:
+    hub = make_hub()
+    recommender = LiveRecommender(hub, Insights(hub.summaries_snapshot), min_sample=1, refresh_seconds=5)
+    snapshot = next(item for item in frames() if item.match.phase == "deploying" and item.match.round == 5)
+    recommender.submit(snapshot, 0)
+    first = recommender.flush()
+    assert all(entry["n"] == 0 for entry in first["players"][0]["counters"])
+    assert not recommender.refresh_if_stale(now=time.monotonic() + 60)  # nothing changed
+    enemy = snapshot.players[1].units[0].unit_id
+    boards = [[{"round": 5, "unitIds": [snapshot.players[0].units[0].unit_id]}], [{"round": 5, "unitIds": [enemy]}]]
+    row = {
+        "battleId": "b1",
+        "replayPath": "b1.grbr",
+        "players": [
+            {"playerId": "a", "won": True, "boards": boards[0]},
+            {"playerId": "b", "won": False, "boards": boards[1]},
+        ],
+    }
+    hub.upsert_summary(row)
+    assert not recommender.refresh_if_stale(now=time.monotonic())  # rate-limited
+    assert recommender.refresh_if_stale(now=time.monotonic() + 60)
+    second = recommender.flush()
+    assert next(entry for entry in second["players"][0]["counters"] if entry["enemyUnitId"] == enemy)["n"] == 1

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import sys
 import threading
+import time
 from collections.abc import Callable, Sequence
 from typing import Any
 
@@ -29,6 +30,9 @@ from .live import LiveProcessor, WinPredictor
 RECOMMEND_PHASES = ("deploying", MODEL_SNAPSHOT_PHASE)
 TOP_ACTIONS = 8
 COUNTER_SUGGESTIONS = 3
+# The counters follow the summaries: when they change (indexing, a new replay), the last frame is re-ranked, at
+# most this often.
+REFRESH_SECONDS = 10.0
 RANKING_NOTE = "The win model's static judgement of the changed board; no fight is simulated."
 
 Ranker = Callable[..., tuple[float, list[RankedAction]]]
@@ -118,8 +122,10 @@ class LiveRecommender:
         top: int = TOP_ACTIONS,
         rank: Ranker = rank_actions,
         min_sample: int = MIN_SAMPLE,
+        refresh_seconds: float = REFRESH_SECONDS,
     ) -> None:
         self._hub = hub
+        self._refresh_seconds = refresh_seconds
         self._insights = insights
         self._catalog = catalog or ActionCatalog.from_game_data()
         self._top = top
@@ -132,6 +138,10 @@ class LiveRecommender:
         self._history = FightOverHistory()
         # The last fight_over frame with filled histories, per battle: a deploying frame borrows its histories.
         self._fight_over: dict[str | None, MatchSnapshot] = {}
+        # The last ranked frame, the summaries generation its counters used, and when it was ranked.
+        self._last: tuple[MatchSnapshot, int | None] | None = None
+        self._last_generation: int | None = None
+        self._last_ranked = 0.0
 
     def set_artifact(self, artifact: dict[str, Any] | None) -> None:
         with self._condition:
@@ -160,7 +170,21 @@ class LiveRecommender:
             with self._condition:
                 if self._pending is None:
                     self._condition.wait(poll_seconds)
+            self.refresh_if_stale()
             self.flush()
+
+    def refresh_if_stale(self, now: float | None = None) -> bool:
+        """Re-queue the last ranked frame when the summaries changed since (rate-limited); True when queued."""
+        if self._insights is None:
+            return False
+        now = time.monotonic() if now is None else now
+        with self._condition:
+            if self._pending is not None or self._last is None or now - self._last_ranked < self._refresh_seconds:
+                return False
+            if self._insights.generation() == self._last_generation:
+                return False
+            self._pending = self._last
+            return True
 
     def flush(self) -> dict[str, Any] | None:
         """Rank the queued frame now, if any, and send it; returns the payload."""
@@ -169,11 +193,14 @@ class LiveRecommender:
             artifact = self._artifact
         if pending is None:
             return None
+        generation = None if self._insights is None else self._insights.generation()
         try:
             payload = self.compute(pending[0], pending[1], artifact)
         except Exception as error:
             print(f"Visualizer: recommendations failed: {error}", file=sys.stderr, flush=True)
             return None
+        with self._condition:
+            self._last, self._last_generation, self._last_ranked = pending, generation, time.monotonic()
         self._hub.set_recommendations(payload)
         return payload
 

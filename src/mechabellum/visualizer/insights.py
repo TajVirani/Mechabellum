@@ -284,6 +284,10 @@ class Insights:
         self._generation: int | None = None
         self._cache: dict[tuple[Any, ...], Any] = {}
 
+    def generation(self) -> int:
+        """The summaries' current generation; it changes whenever they do."""
+        return self._snapshot()[0]
+
     def winning_boards(
         self,
         summary_filter: SummaryFilter,
