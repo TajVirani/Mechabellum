@@ -95,3 +95,25 @@ def test_ranking_is_sorted_by_gain(tmp_path: Path) -> None:
     gains = [item.gain for item in ranked]
     assert gains == sorted(gains, reverse=True)
     assert {item.action.kind for item in ranked} >= {"buy", "upgrade", "move", "card"}
+
+
+def test_unlocks_are_opt_in_and_unlock_then_buy() -> None:
+    data = _example()
+    data["players"][0]["supply"] = 1000
+    data["players"][0]["unlockedUnitIds"] = [28]
+    data["players"][0]["lockedUnitIds"] = [1, 999999]
+    snapshot = validate_snapshot(data)
+    catalog = ActionCatalog.from_game_data()
+    assert not [action for action in candidate_actions(snapshot, 0, catalog) if action.kind == "unlock"]
+    unlocks = [action for action in candidate_actions(snapshot, 0, catalog, unlocks=True) if action.kind == "unlock"]
+    # Unit 999999 has no known price, so it is left out.
+    assert [action.parameters["unitId"] for action in unlocks] == [1]
+    unlock = unlocks[0]
+    assert unlock.estimated_cost == catalog.unlock_prices[1] + catalog.unit_prices[1]
+    after = apply_action(snapshot, 0, unlock).players[0]
+    assert after.supply == 1000 - unlock.estimated_cost
+    assert 1 in after.unlocked_unit_ids and 1 not in after.locked_unit_ids
+    assert after.units[-1].unit_id == 1 and after.units[-1].sell_supply == catalog.unit_prices[1]
+    data["players"][0]["supply"] = catalog.unit_prices[1]
+    poor = validate_snapshot(data)
+    assert not [action for action in candidate_actions(poor, 0, catalog, unlocks=True) if action.kind == "unlock"]

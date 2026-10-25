@@ -39,9 +39,11 @@ from ..contracts import (
 from ..features.geometry import board_sign
 from ..models import win_probabilities
 
-ActionKind = Literal["buy", "upgrade", "technology", "move", "card"]
+ActionKind = Literal["buy", "unlock", "upgrade", "technology", "move", "card"]
 MOVE_STEP = 40.0
 BUY_SLOTS = ((-160.0, 120.0), (0.0, 120.0), (160.0, 120.0), (-160.0, 240.0), (0.0, 240.0), (160.0, 240.0))
+# An unlock is judged by buying one of the newly unlocked unit at the middle front slot.
+UNLOCK_SLOT = BUY_SLOTS[1]
 CardEffect = Literal["equipment", "officer", "commander_skill", "technology", "unknown"]
 
 
@@ -55,9 +57,10 @@ class CandidateAction:
 
 @dataclass
 class ActionCatalog:
-    """What actions cost and do: unit, upgrade, technology and card prices, technologies per unit, card effects."""
+    """What actions cost and do: unit, unlock, upgrade, technology and card prices, unit technologies, card effects."""
 
     unit_prices: dict[int, int] = field(default_factory=dict)
+    unlock_prices: dict[int, int] = field(default_factory=dict)
     upgrade_prices: dict[int, int] = field(default_factory=dict)
     technology_prices: dict[int, int] = field(default_factory=dict)
     card_prices: dict[int, int] = field(default_factory=dict)
@@ -76,6 +79,9 @@ class ActionCatalog:
             effects.update(dict.fromkeys(table, effect))
         return cls(
             unit_prices={unit: price["supply"] for unit, price in UNIT_PRICES.items() if "supply" in price},
+            unlock_prices={
+                unit: price["unlockSupply"] for unit, price in UNIT_PRICES.items() if "unlockSupply" in price
+            },
             upgrade_prices={
                 unit: price["upgradeSupply"] for unit, price in UNIT_PRICES.items() if "upgradeSupply" in price
             },
@@ -134,11 +140,35 @@ def _card_effect(before: PlayerSnapshot, after: PlayerSnapshot, card: int) -> st
 
 
 def candidate_actions(
-    snapshot: MatchSnapshot, perspective: int, catalog: ActionCatalog, cards: Iterable[int] = ()
+    snapshot: MatchSnapshot,
+    perspective: int,
+    catalog: ActionCatalog,
+    cards: Iterable[int] = (),
+    *,
+    unlocks: bool = False,
 ) -> list[CandidateAction]:
-    """Buys, upgrades, technologies, moves and offered cards, leaving out those the player's supply cannot pay for."""
+    """Buys, upgrades, technologies, moves and offered cards, leaving out those the player's supply cannot pay for.
+
+    With `unlocks`, each locked unit with a known price also gets an "unlock" action: unlock it and buy one at
+    UNLOCK_SLOT, costing the unlock plus the unit.
+    """
     player = snapshot.players[perspective]
     actions: list[CandidateAction] = []
+    if unlocks:
+        x, depth = UNLOCK_SLOT
+        for unit_id in player.locked_unit_ids or []:
+            price = catalog.unit_prices.get(unit_id)
+            if price is None:
+                continue
+            unlock = catalog.unlock_prices.get(unit_id, 0)
+            actions.append(
+                CandidateAction(
+                    "unlock",
+                    f"Unlock and buy {unit_name(unit_id)} at lane x={x:+.0f}, depth {depth:.0f}",
+                    {"unitId": unit_id, "x": x, "depth": depth, "unlockCost": unlock, "unitCost": price},
+                    unlock + price,
+                )
+            )
     for unit_id in player.unlocked_unit_ids or sorted({unit.unit_id for unit in player.units}):
         for x, depth in BUY_SLOTS:
             actions.append(
@@ -209,23 +239,12 @@ def apply_action(snapshot: MatchSnapshot, perspective: int, action: CandidateAct
     update: dict[str, Any] = {}
     parameters = action.parameters
     if action.kind == "buy":
+        units.append(_new_unit(parameters, len(units), sign, action.estimated_cost or 0))
+    elif action.kind == "unlock":
         unit_id = parameters["unitId"]
-        units.append(
-            UnitDeployment(
-                unit_id=unit_id,
-                unit_name=unit_name(unit_id),
-                formation_index=len(units),
-                raw_level=0,
-                display_level=1,
-                experience=0,
-                x=parameters["x"] * -sign,
-                y=parameters["depth"] * sign,
-                is_rotated=False,
-                sell_supply=action.estimated_cost or 0,
-                round_count=0,
-                equipment=[],
-            )
-        )
+        units.append(_new_unit(parameters, len(units), sign, parameters["unitCost"]))
+        update["unlocked_unit_ids"] = [*(player.unlocked_unit_ids or []), unit_id]
+        update["locked_unit_ids"] = [item for item in player.locked_unit_ids or [] if item != unit_id]
     elif action.kind == "upgrade":
         unit = units[parameters["formation"]]
         units[parameters["formation"]] = unit.model_copy(
@@ -273,6 +292,25 @@ def apply_action(snapshot: MatchSnapshot, perspective: int, action: CandidateAct
     players = list(snapshot.players)
     players[perspective] = player.model_copy(update=update)
     return snapshot.model_copy(update={"players": players})
+
+
+def _new_unit(parameters: dict[str, Any], formation: int, sign: float, sell_supply: int) -> UnitDeployment:
+    """A freshly bought level-1 formation at the parameters' lane x and depth into the player's half."""
+    unit_id = parameters["unitId"]
+    return UnitDeployment(
+        unit_id=unit_id,
+        unit_name=unit_name(unit_id),
+        formation_index=formation,
+        raw_level=0,
+        display_level=1,
+        experience=0,
+        x=parameters["x"] * -sign,
+        y=parameters["depth"] * sign,
+        is_rotated=False,
+        sell_supply=sell_supply,
+        round_count=0,
+        equipment=[],
+    )
 
 
 @dataclass(frozen=True)
