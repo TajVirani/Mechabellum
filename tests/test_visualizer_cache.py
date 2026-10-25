@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shutil
 from pathlib import Path
 
@@ -136,6 +137,28 @@ def test_watcher_reparses_a_replay_when_its_result_file_arrives(tmp_path: Path) 
     cache.close()
 
 
+def test_restart_rechecks_a_skipped_replay_whose_result_file_arrived_while_stopped(tmp_path: Path) -> None:
+    """A "no known winner" entry cached before the result file existed is re-read at the next start-up, even
+    when the result file keeps an older mtime than the replay (copied with its times preserved)."""
+    replays = tmp_path / "Replay" / "2.0.0.4.2331"
+    replays.mkdir(parents=True)
+    source = REPLAYS / "2.0.0.4.2331" / "7699235027090934905.rep.grbr"
+    cup = replays / source.name
+    shutil.copy2(source, cup)
+    cache = SummaryCache(tmp_path / "v.sqlite")
+    assert ReplayWatcher(tmp_path / "Replay", cache, lambda _: None).scan_existing() == []
+    assert cache.lookup(cup, *_state(cup)) == CachedSummary(None, "no known winner")
+
+    write_result(cup, 281474976711589755, 281474976711565323, "test")
+    replay_mtime_ns = cup.stat().st_mtime_ns
+    os.utime(result_path(cup), ns=(replay_mtime_ns - 10**9, replay_mtime_ns - 10**9))
+
+    rows = ReplayWatcher(tmp_path / "Replay", cache, lambda _: None).scan_existing()
+    assert len(rows) == 1 and rows[0]["winnerIndex"] in {0, 1}
+    assert rows[0]["gameMode"] == "Competition"
+    cache.close()
+
+
 def test_cache_key_follows_the_data_files() -> None:
     key = summaries_module.summary_cache_key(1, b"roles", b"names", b"versions")
     assert key.startswith("v1-") and not key.replace("-", "").isdigit()
@@ -228,8 +251,4 @@ def _copy_replay(source: Path, target: Path) -> None:
 
 def _state(path: Path) -> tuple[int, int]:
     """The watcher's (size, mtime) of a replay: a result file beside it counts as a change."""
-    stat = path.stat()
-    mtime_ns = stat.st_mtime_ns
-    if result_path(path).is_file():
-        mtime_ns = max(mtime_ns, result_path(path).stat().st_mtime_ns)
-    return stat.st_size, mtime_ns
+    return watcher_module.replay_state(path)

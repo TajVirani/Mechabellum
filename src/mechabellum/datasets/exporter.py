@@ -16,7 +16,7 @@ class ExportSummary:
     snapshot_count: int
     failure_count: int
     failures: tuple[str, ...]
-    # 1v1 matches left out because the replay names no winner, such as tournament (Competition) replays.
+    # 1v1 matches left out because the replay names no winner, such as a 2331 replay without a result file.
     no_winner_count: int = 0
 
 

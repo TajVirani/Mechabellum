@@ -27,6 +27,22 @@ def replay_paths(replay_dir: Path) -> list[Path]:
     return sorted(replay_dir.rglob(REPLAY_PATTERN), key=lambda path: path.relative_to(replay_dir).as_posix().casefold())
 
 
+def replay_state(path: Path) -> tuple[int, int]:
+    """(size, mtime) of a replay as the watcher and cache see it; raises OSError when the replay can't be read.
+
+    A tournament replay's winner can arrive later in a result file beside it, and that counts as a change: the
+    result file's size is added to the replay's and the newer of the two mtimes is used. The size matters when
+    the result file keeps an older mtime than the replay, as a copy that preserves times (copy2, robocopy) does.
+    """
+    stat = path.stat()
+    size, mtime_ns = stat.st_size, stat.st_mtime_ns
+    try:
+        result = result_path(path).stat()
+    except OSError:
+        return size, mtime_ns
+    return size + result.st_size, max(mtime_ns, result.st_mtime_ns)
+
+
 class ReplayWatcher:
     """Summarises the replays in `replay_dir`, through the cache.
 
@@ -179,16 +195,9 @@ class ReplayWatcher:
         states = {}
         for path in replay_paths(self._dir) if self._dir.is_dir() else []:
             try:
-                stat = path.stat()
+                states[path] = replay_state(path)
             except OSError:
                 continue
-            mtime_ns = stat.st_mtime_ns
-            # A tournament replay's winner can arrive later in a result file beside it; that counts as a change.
-            try:
-                mtime_ns = max(mtime_ns, result_path(path).stat().st_mtime_ns)
-            except OSError:
-                pass
-            states[path] = (stat.st_size, mtime_ns)
         return states
 
     def _summarize(self, path: Path, state: tuple[int, int]) -> dict[str, Any] | None:
