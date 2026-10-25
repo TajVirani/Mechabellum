@@ -289,6 +289,18 @@ input {
 .c-boards {
   grid-column: span 7;
 }
+.c-winning-boards {
+  grid-column: span 7;
+}
+.c-counters {
+  grid-column: span 5;
+}
+.c-recommendations {
+  grid-column: span 7;
+}
+.c-live-counters {
+  grid-column: span 5;
+}
 
 
 /* ---------- panels ---------- */
@@ -1311,4 +1323,218 @@ tr.is-new {
   .role-chip {
     font-size: 8px;
   }
+}
+
+/* ---------- insights: winning boards, counters, recommendations ---------- */
+.insight-panel .panel-tools {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.c-winning-boards .scroll-panel .panel-body,
+.c-counters .scroll-panel .panel-body {
+  max-height: 420px;
+}
+
+.insight-summary {
+  margin: 8px 0;
+}
+
+.thin-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ci {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ci .wr-value {
+  min-width: 42px;
+  text-align: right;
+}
+
+.ci-bar {
+  position: relative;
+  display: inline-block;
+  width: 110px;
+  height: 8px;
+  background: var(--surface-row-deep);
+  border: 1px solid var(--edge-soft);
+}
+
+.ci-range {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  background: var(--tab-active);
+}
+
+.ci-point,
+.ci-base {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  margin-left: -1px;
+}
+
+.ci-point {
+  background: var(--highlight);
+}
+
+.ci-base {
+  background: var(--text-dim);
+}
+
+.lift.up,
+.rec-gain.up {
+  color: var(--win);
+}
+
+.lift.down,
+.rec-gain.down {
+  color: var(--loss);
+}
+
+.counter-pick {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 4px;
+  flex-wrap: wrap;
+}
+
+.enemy-select {
+  width: auto;
+  min-width: 180px;
+}
+
+.rec-cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--gap);
+}
+
+.rec-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--edge-soft);
+}
+
+.rec-player {
+  font-weight: 700;
+}
+
+.rec-col.side-left .rec-player {
+  color: var(--team-self-hi);
+}
+
+.rec-col.side-right .rec-player {
+  color: var(--team-enemy-hi);
+}
+
+.rec-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.rec-row {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr) 56px 76px;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--edge-soft);
+}
+
+.rec-labels {
+  border-bottom: 0;
+}
+
+.rec-kind {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.rec-row.kind-unlock .rec-kind,
+.rec-row.kind-card .rec-kind {
+  color: var(--accent-hud);
+}
+
+.rec-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rec-cost,
+.rec-gain {
+  text-align: right;
+}
+
+.rec-gain {
+  position: relative;
+}
+
+.rec-gain-bar {
+  position: absolute;
+  right: 0;
+  bottom: -2px;
+  height: 2px;
+  background: currentColor;
+  opacity: 0.6;
+}
+
+.rec-note {
+  margin: 8px 0 0;
+}
+
+.counter-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.counter-item {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--edge-soft);
+}
+
+.counter-picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.counter-pick-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 8px;
+  font-size: 11px;
+  background: var(--surface-row-deep);
+  border: 1px solid var(--edge-soft);
+  clip-path: var(--cut-small);
+}
+
+.counter-pick-chip.owned::before {
+  content: "\2605";
+  margin-right: 3px;
+  color: var(--highlight);
+}
+
+.counter-block + .counter-block {
+  margin-top: 10px;
 }

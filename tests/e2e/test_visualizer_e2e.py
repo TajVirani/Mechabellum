@@ -462,6 +462,48 @@ def test_layout_fits_without_horizontal_scroll(browser: Any, finished: LiveSessi
         tab.page.context.close()
 
 
+def test_winning_boards_and_counters_show_samples(stats_tab: Tab) -> None:
+    page = stats_tab.page
+    page.evaluate("() => window.__visualizer.ui.view.set('stats')")
+    boards = panel(stats_tab, "winning-boards")
+    counters = panel(stats_tab, "counters")
+    page.wait_for_selector('[data-panel="winning-boards"] .insight-summary', state="attached", timeout=20_000)
+    # Three fixture replays: every entry is below the minimum sample, so they're hidden until "Show thin".
+    assert "Minimum sample n=20" in boards.inner_text()
+    boards.locator(".thin-toggle input").check()
+    try:
+        boards.locator('[data-value="early"]').click()
+        wait_ready(stats_tab, "winning-boards", "counters")
+        rows = boards.locator("tbody tr")
+        assert rows.count() > 0
+        assert all(int(n) < 20 for n in rows.evaluate_all("rs => rs.map(r => r.dataset.n)"))
+        assert boards.locator("tbody tr.thin").count() == rows.count()
+        assert "Observed association, not causal" in counters.inner_text()
+        assert counters.locator(".enemy-select option").count() > 0
+    finally:
+        boards.locator(".thin-toggle input").uncheck()
+        boards.locator('[data-value="mid"]').click()
+    stats_tab.assert_clean()
+
+
+def test_current_match_shows_recommendations_or_model_unavailable(finished: LiveSession) -> None:
+    tab = finished.early
+    page = tab.page
+    page.evaluate("() => window.__visualizer.ui.view.set('current')")
+    recommendations = panel(tab, "recommendations")
+    page.wait_for_selector('[data-panel="recommendations"][data-state="ready"]', state="attached", timeout=60_000)
+    if model_available(tab):
+        page.wait_for_function("() => window.__visualizer.store.recommendations.get()?.round === 10", timeout=60_000)
+        assert recommendations.get_attribute("data-model") == "available"
+        assert recommendations.locator(".rec-col").count() == 1
+    else:
+        assert "Model unavailable" in recommendations.inner_text()
+    # Too few fixture replays for any counter to reach the minimum sample: the panel says so.
+    page.wait_for_selector('[data-panel="live-counters"] .rec-note', state="attached", timeout=60_000)
+    assert "minimum sample" in panel(tab, "live-counters").inner_text()
+    tab.assert_clean()
+
+
 # ---- server --------------------------------------------------------------------------------------------------
 
 

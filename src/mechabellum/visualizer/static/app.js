@@ -21,6 +21,10 @@ import * as composition from "./panels/composition.js";
 import * as armyHp from "./panels/army-hp.js";
 import * as boards from "./panels/boards.js";
 import * as offer from "./panels/offer.js";
+import * as winningBoards from "./panels/winning-boards.js";
+import * as counters from "./panels/counters.js";
+import * as recommendations from "./panels/recommendations.js";
+import * as liveCounters from "./panels/live-counters.js";
 
 function buildLayout(root) {
   const tab = (view, label) =>
@@ -39,6 +43,8 @@ function buildLayout(root) {
     units: g("c-units"),
     specialists: g("c-specialists"),
     openings: g("c-openings"),
+    winningBoards: g("c-winning-boards"),
+    counters: g("c-counters"),
     recent: g("c-recent"),
     opponents: g("c-opponents"),
   };
@@ -48,6 +54,8 @@ function buildLayout(root) {
     composition: g("c-composition"),
     army: g("c-army"),
     boards: g("c-boards"),
+    recommendations: g("c-recommendations"),
+    liveCounters: g("c-live-counters"),
     offer: g("c-offer"),
   };
   const statsView = h("main", { class: "view stats-view", "data-view-container": "stats" }, Object.values(stats));
@@ -67,12 +75,16 @@ function mountPanels(layout) {
   openings.mount(layout.stats.openings);
   recent.mount(layout.stats.recent);
   opponents.mount(layout.stats.opponents);
+  winningBoards.mount(layout.stats.winningBoards);
+  counters.mount(layout.stats.counters);
   matchHeader.mount(layout.current.header);
   winProbability.mount(layout.current.win);
   composition.mount(layout.current.composition);
   armyHp.mount(layout.current.army);
   boards.mount(layout.current.boards);
   offer.mount(layout.current.offer);
+  recommendations.mount(layout.current.recommendations);
+  liveCounters.mount(layout.current.liveCounters);
 }
 
 function bindViews(layout) {

@@ -21,6 +21,7 @@ function initialState(connection = "connecting") {
     frame: null, // {snapshot, localIndex, composition, boardAsOfLastFight}
     match: null, // per-round history of the current match, built from frames: {battleId, rounds: {r: {...}}}
     predictions: { battleId: null, rows: [] },
+    recommendations: null, // latest `recommendations` payload: {battleId, round, phase, modelAvailable, players: [...]}
   };
 }
 
@@ -33,6 +34,13 @@ export const ui = observable({
   compositionScope: "round", // "round" | "match"
   unitsSort: { key: "fielded", dir: -1 },
   showSetup: false,
+  // What winning boards have / Counters (Stats): fetched from /api/winning-boards and /api/counters.
+  insightsBand: "mid", // "early" | "mid" | "late"
+  insightsKind: "units", // "units" | "technologies"
+  insightsScope: "all", // "all" (every indexed replay) | "me" (the Local Player's side only)
+  insightsShowThin: false,
+  countersBand: "all", // "all" | "early" | "mid" | "late"
+  countersEnemy: null, // unit id, or null for the most observed enemy unit
 });
 
 // Chronological order: battleId is `YYYYMMDD--<ms into the day>`.
@@ -176,6 +184,9 @@ export function applyEvent(type, data) {
         store.predictions.set({ battleId: data.battleId, rows });
         break;
       }
+      case "recommendations":
+        store.recommendations.set(data);
+        break;
       case "config":
         store.localPlayerId.set(data.localPlayerId ?? null);
         if (store.hello.peek()) {
@@ -200,5 +211,6 @@ export const EVENT_TYPES = [
   "frame",
   "predictions",
   "prediction",
+  "recommendations",
   "config",
 ];
