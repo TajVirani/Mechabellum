@@ -42,6 +42,8 @@
 - [x] Preserve raw values and explicit masks for missing, unknown, and version-new IDs; never silently treat them as 0
 - [x] First implement a fixed grid/zone coordinate baseline, then Deep Sets / Transformer / graph neural network (GNN) models over formation tokens (`mecha train-deep`; they need far more matches to beat the linear model)
 - [x] Version the base position schema and keep replay training data and live spectator snapshot fields consistent
+- [x] Positioning style labels and role-aware positioning features (opt-in feature schema 3, `features/style.py`; no measurable gain over schema 2, docs/experiments.md 2026-10-25)
+- [ ] Fix the schema 2 board frame for flank-heavy boards (`board_sign` lets flank formations vote; 1.5% of player snapshots are turned around; schema 3 already uses the main-region vote) the next time the default schema changes
 
 ## P1C: Round value targets
 
