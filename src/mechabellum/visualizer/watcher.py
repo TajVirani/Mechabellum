@@ -9,6 +9,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from ..collector.replay.result import result_path
 from .cache import CachedSummary, SummaryCache
 from .summaries import SkippedReplay, summarize_replay
 
@@ -181,7 +182,13 @@ class ReplayWatcher:
                 stat = path.stat()
             except OSError:
                 continue
-            states[path] = (stat.st_size, stat.st_mtime_ns)
+            mtime_ns = stat.st_mtime_ns
+            # A tournament replay's winner can arrive later in a result file beside it; that counts as a change.
+            try:
+                mtime_ns = max(mtime_ns, result_path(path).stat().st_mtime_ns)
+            except OSError:
+                pass
+            states[path] = (stat.st_size, mtime_ns)
         return states
 
     def _summarize(self, path: Path, state: tuple[int, int]) -> dict[str, Any] | None:

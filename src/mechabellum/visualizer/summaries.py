@@ -24,7 +24,7 @@ from ..contracts import FightResult
 from .roles import board_composition
 
 # Bump whenever the summary shape or its rules change; cached summaries of another version are rebuilt.
-SUMMARY_VERSION = 1
+SUMMARY_VERSION = 2
 
 # Specialists are the officers whose name is also a non-lineup advance team ("Supply Specialist", not "3 Fang + ...").
 SPECIALIST_IDS: frozenset[int] = frozenset(

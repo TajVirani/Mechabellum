@@ -48,7 +48,7 @@ Static files ship as package data.
 
 ### Match Summary
 
-One per replay, built server-side, cached by (path, size, mtime, `SUMMARY_CACHE_KEY`). The cache key combines `SUMMARY_VERSION` with a hash of `unit_roles.json`, `game_names.json` and the known game-version table, so a change to any of them rebuilds the cached summaries. Only 1v1 (`VS_1_1`) replays with a known winner become summaries; others are recorded as skipped so they aren't re-parsed. JSON, camelCase:
+One per replay, built server-side, cached by (path, size, mtime, `SUMMARY_CACHE_KEY`). The cache key combines `SUMMARY_VERSION` with a hash of `unit_roles.json`, `game_names.json` and the known game-version table, so a change to any of them rebuilds the cached summaries. Only 1v1 (`VS_1_1`) replays with a known winner become summaries; others are recorded as skipped so they aren't re-parsed. A tournament replay's winner can come from a `<id>.rep.result.json` beside it; the mtime used is the newer of the two files, so a result file that arrives later re-parses the replay. JSON, camelCase:
 
 ```jsonc
 {

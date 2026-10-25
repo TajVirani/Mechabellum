@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from mechabellum.collector.replay.result import write_result
 from mechabellum.visualizer import cache as cache_module
 from mechabellum.visualizer import summaries as summaries_module
 from mechabellum.visualizer import watcher as watcher_module
@@ -115,6 +116,23 @@ def test_watcher_records_unreadable_replays_as_skipped(tmp_path: Path) -> None:
     )
     broken = cache.lookup(replays / "broken.grbr", 12, (replays / "broken.grbr").stat().st_mtime_ns)
     assert broken is not None and broken.summary is None and broken.skipped_reason.startswith("unreadable")
+    cache.close()
+
+
+def test_watcher_reparses_a_replay_when_its_result_file_arrives(tmp_path: Path) -> None:
+    replays = tmp_path / "Replay"
+    replays.mkdir()
+    cup = replays / "cup.rep.grbr"
+    shutil.copy2(REPLAYS / "2.0.0.4.2331" / "7699235027090934905.rep.grbr", cup)
+    cache = SummaryCache(tmp_path / "v.sqlite")
+    watcher = ReplayWatcher(replays, cache, lambda _: None)
+    assert watcher.scan_existing() == []
+    write_result(cup, 281474976711589755, 281474976711565323, "test")
+    assert watcher.poll() == []
+    rows = watcher.poll()
+    assert len(rows) == 1 and rows[0]["winnerIndex"] in {0, 1}
+    # A restart reads the labelled summary from the cache.
+    assert len(ReplayWatcher(replays, cache, lambda _: None).scan_existing()) == 1
     cache.close()
 
 
