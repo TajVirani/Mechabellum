@@ -12,7 +12,7 @@ Every request runs on Unity's main thread and calls the functions the tournament
 | `CompetitionPageRequest` | `CompetitionProxy.RequestHistoryMatchDetail(id, subId, page)`. The reply lists each replay path once, with the winner's and loser's user ids from the ranking's `RoundRecord.Win` |
 | `DownloadReplayRequest` | `ReplayProxy.DowloadServerReplay(path)`, then the replay is saved through `FileUtility.SaveBinary` to `Replay\<version>\<id>.rep.grbr`, where the window's download button saves it |
 
-Replies are read by Harmony prefixes on `OnResponseHistoryMatch`, `OnResponseHistoryMatchDetail` and `OnResponseMatchList`; they copy the data and let the game's handler run unchanged. Requests that reach the game's servers are spaced at least `ServerRequestIntervalMs` apart (default 1500 ms), and run one at a time. The mod never sends game data of its own.
+Replies are read by Harmony prefixes on `OnResponseHistoryMatch`, `OnResponseHistoryMatchDetail` and `OnResponseMatchList`; they copy the data and let the game's handler run unchanged. One more prefix skips `Competition_HistoryWindow.RefreshList` while the game handles a detail reply the mod asked for, because the window was never opened and the refresh throws a `NullReferenceException`; replies to the window's own requests refresh it as usual. Requests that reach the game's servers are spaced at least `ServerRequestIntervalMs` apart (default 1500 ms), and run one at a time. The mod never sends game data of its own.
 
 The server accepts connections from the local machine only, and browsers only from pages served by `localhost`.
 

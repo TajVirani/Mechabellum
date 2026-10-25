@@ -9,6 +9,7 @@ namespace MechaBridge;
 /// <summary>
 /// Observes the game's own handling of tournament replies. The prefixes copy what the bridge needs
 /// into managed objects before the game's handler runs, and never change the arguments or skip the handler.
+/// The one exception is the history window's list refresh, skipped for replies the mod asked for (see <see cref="WindowRefreshHook"/>).
 /// </summary>
 internal static class ResponseHooks
 {
@@ -17,6 +18,7 @@ internal static class ResponseHooks
     private static int _historyPage;
     private static CompetitionPageReply? _detail;
     private static (int Id, int SubId, int Page) _detailKey;
+    private static bool _handlingOwnDetail;
 
     public static int MatchListGeneration { get; private set; }
 
@@ -80,6 +82,7 @@ internal static class ResponseHooks
     {
         private static void Prefix(ResponseHistoryMatchDetail __1)
         {
+            _handlingOwnDetail = false;
             var message = __1;
             if (message is null)
                 return;
@@ -121,9 +124,26 @@ internal static class ResponseHooks
             lock (Gate)
             {
                 if ((reply.CompetitionId, reply.SubId, reply.Page) == _detailKey)
+                {
+                    // Still waiting means the mod sent the request; a player opening the same page meanwhile is not told apart.
+                    _handlingOwnDetail = _detail is null;
                     _detail = reply;
+                }
             }
         }
+
+        private static void Postfix() => _handlingOwnDetail = false;
+    }
+
+    /// <summary>
+    /// The game's detail handler notifies the history window's mediator, whose RefreshList throws a
+    /// NullReferenceException when the window was never opened. For the mod's own requests the refresh is
+    /// skipped; replies to the window's requests refresh it as usual.
+    /// </summary>
+    [HarmonyPatch(typeof(Competition_HistoryWindow), nameof(Competition_HistoryWindow.RefreshList))]
+    private static class WindowRefreshHook
+    {
+        private static bool Prefix() => !_handlingOwnDetail;
     }
 
     [HarmonyPatch(typeof(CompetitionProxy), nameof(CompetitionProxy.OnResponseMatchList))]
