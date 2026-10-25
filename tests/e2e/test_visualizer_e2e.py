@@ -497,7 +497,8 @@ def test_current_match_shows_recommendations_or_model_unavailable(finished: Live
         assert recommendations.get_attribute("data-model") == "available"
         assert recommendations.locator(".rec-col").count() == 1
     else:
-        assert "Model unavailable" in recommendations.inner_text()
+        assert recommendations.get_attribute("data-model") == "unavailable"
+        assert "model unavailable" in recommendations.inner_text().lower()
     # Too few fixture replays for any counter to reach the minimum sample: the panel says so.
     page.wait_for_selector('[data-panel="live-counters"] .rec-note', state="attached", timeout=60_000)
     assert "minimum sample" in panel(tab, "live-counters").inner_text()
