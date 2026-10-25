@@ -10,6 +10,8 @@
 - [x] Time-split training (`--split time`) and probability calibration (`--calibration sigmoid|isotonic`)
 - [ ] Accumulate at least 5,000 same-version 1v1 matches so time-split calibration has enough data
 - [x] Label tournament (`Competition`) replays from `mecha fetch-replays` with the winner from the tournament history (the replay file does not record it; the mod reports `RoundRecord.Win` from `RequestHistoryMatchDetail`, `fetch-replays` writes it to `<id>.rep.result.json`, and the parser reads that file when `teamRanks` is empty)
+- [x] Label the player's own top-level replays with the winner from the personal match history (`mecha fetch-results`: the mod's `PersonalHistoryRequest` returns `PowerRecordProxy.RequestFPDetail`'s records, matched to replays by opponent, map and time)
+- [ ] Confirm live what the match history's `Win` and `Time` hold and how many records `RequestFPDetail` returns (`fetch-results` calibrates `Win` and prints the median time gap)
 - [x] Add evaluation reports broken down by round, map, rank tier, and version (`mecha evaluate`; replays carry no rating, so rank tiers need live recordings)
 - [x] Read live player phase and predict once per round when both players reach `FightOver`
 - [x] Add a stable JSONL recorder for live snapshots, with timestamps (`mecha live-record`)

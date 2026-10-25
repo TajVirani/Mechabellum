@@ -111,6 +111,35 @@ def _parser() -> argparse.ArgumentParser:
     )
     fetch.add_argument("--port", type=int, help="MechaBridge WebSocket port, default 17615.")
 
+    results = _command(
+        commands,
+        "fetch-results",
+        "Label your own replays with the winners from the game's match history, through the MechaBridge mod.",
+        _fetch_results,
+    )
+    results.add_argument(
+        "--win-means",
+        choices=("index", "flag"),
+        help="How to read a history record's win field: the winning player's index, or a flag that you won. "
+        "By default it is calibrated against replays that record their own winner.",
+    )
+    results.add_argument(
+        "--tolerance-minutes",
+        type=float,
+        default=45,
+        help="Largest gap between a record's time and the replay file's modification time.",
+    )
+    results.add_argument(
+        "--min-agreements",
+        type=int,
+        default=3,
+        help="Calibration replays that must agree with the record before any result is written.",
+    )
+    results.add_argument("--force", action="store_true", help="Overwrite existing result files.")
+    results.add_argument("--dry-run", action="store_true", help="Show what would be written without writing.")
+    results.add_argument("--replay-dir", type=Path, help="Replay folder; defaults to the one the game reports.")
+    results.add_argument("--port", type=int, help="MechaBridge WebSocket port, default 17615.")
+
     train = _command(commands, "train", "Train a final win probability model from MatchSnapshot JSONL.", _train)
     train.add_argument("--dataset", type=Path, required=True)
     train.add_argument("--output", type=Path, default=Path("artifacts/win_model.joblib"))
@@ -442,6 +471,61 @@ def _fetch_replays(args: argparse.Namespace) -> int:
         file=sys.stderr,
     )
     return 1 if summary.failed else 0
+
+
+def _fetch_results(args: argparse.Namespace) -> int:
+    from ..bridge import DEFAULT_PORT, BridgeClient, BridgeError
+    from ..collector.personal_history import label_own_replays
+
+    if args.tolerance_minutes <= 0:
+        raise ValueError("--tolerance-minutes must be positive.")
+    with BridgeClient.connect(args.port or DEFAULT_PORT) as bridge:
+        status = bridge.status()
+        if not status.online:
+            raise RuntimeError("the game is not online; wait for it to log in at the main menu.")
+        replay_directory = args.replay_dir or Path(status.replay_directory)
+        print(f"MechaBridge {status.mod_version}  Replay directory: {replay_directory}", file=sys.stderr)
+        try:
+            summary = label_own_replays(
+                bridge,
+                replay_directory,
+                win_means=args.win_means,
+                tolerance_seconds=args.tolerance_minutes * 60,
+                min_agreements=args.min_agreements,
+                force=args.force,
+                dry_run=args.dry_run,
+                log=lambda line: print(line, flush=True),
+            )
+        except BridgeError as error:
+            if error.code == "invalid_request":
+                raise RuntimeError(
+                    f"{error}; install MechaBridge 0.2.0 or later, which serves the match history."
+                ) from error
+            raise
+    report, calibration, choice = summary.report, summary.calibration, summary.choice
+    assert calibration is not None and choice is not None
+    offset = summary.median_offset_seconds
+    print(
+        f"History records: {summary.records}; matched {len(report.pairings)}, unmatched {len(report.unmatched)}, "
+        f"ambiguous {len(report.ambiguous)}, not duels {len(report.not_duels)}. "
+        f"Median record time minus replay time: {'n/a' if offset is None else f'{offset / 60:+.1f} min'}.",
+        file=sys.stderr,
+    )
+    print(
+        f"Calibration ({calibration.informative} replays tell the readings apart): "
+        + ", ".join(
+            f"{reading} agrees {calibration.agree[reading]}, disagrees {calibration.disagree[reading]}"
+            for reading in ("index", "flag")
+        )
+        + f". Reading: {choice.reason}.",
+        file=sys.stderr,
+    )
+    print(
+        f"Results {'that would be ' if args.dry_run else ''}written {summary.labeled}, existing kept {summary.kept}, "
+        f"undecided {summary.undecided}.",
+        file=sys.stderr,
+    )
+    return 0 if choice.usable else 1
 
 
 def _train(args: argparse.Namespace) -> None:

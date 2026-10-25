@@ -44,7 +44,7 @@ python -m venv .venv
 .venv\Scripts\python -m pip install -e .
 ```
 
-The base install provides replay and live collection. Install the `ml` extra for training and inference, the `bridge` extra for `fetch-replays`, and the `dev` extra as well for a development environment:
+The base install provides replay and live collection. Install the `ml` extra for training and inference, the `bridge` extra for `fetch-replays` and `fetch-results`, and the `dev` extra as well for a development environment:
 
 ```powershell
 .venv\Scripts\python -m pip install -e ".[ml]"
@@ -133,6 +133,15 @@ Download past tournament replays, newest first, through the [MechaBridge mod](mo
 
 `--full` ignores the 10-in-a-row rule and walks to the oldest requested version, skipping replays already on disk; use it to resume a backfill that was interrupted. A version is the game version followed by the replay format, as the game names its download folders. Downloads land in `Replay\<version>\` under the replay directory, where `export-dataset` and `dataset-stats` find them; tournament replay files do not record the winner, so `fetch-replays` also writes it from the tournament history to `<id>.rep.result.json` next to each replay, and `export-dataset` trains on the replays that have one (see docs/data-sources.md). A run writes the missing result file for every replay it passes that is already on disk, so run `--full` once to label replays downloaded before result files existed.
 
+Label your own matches, the replays the game saves at the top level of the replay folder, with the winner from the game's match history (the profile's power record tab), through the same mod (0.2.0 or later). Many of these replays do not record who won; the history does, but has no battle id, so each record is matched to a replay by opponent, map and time (the replay file's modification time, within `--tolerance-minutes`, 45 by default):
+
+```powershell
+.venv\Scripts\mecha fetch-results --dry-run
+.venv\Scripts\mecha fetch-results
+```
+
+It prints one line per record (`labeled`, `kept`, `undecided`, `unmatched`, `ambiguous`, `not a duel`) and a summary, and writes `<replay name>.result.json` next to each matched replay, never over an existing one unless `--force`. Only 1v1 lobby and tournament records are used; team matches are listed as `not a duel`. What the record's `win` field holds is calibrated against matched replays that record their own winner (see docs/data-sources.md); `--win-means index|flag` sets it by hand.
+
 All commands and options are listed by `.venv\Scripts\mecha --help` and each subcommand's `--help`.
 
 ## Project structure
@@ -145,7 +154,7 @@ Mechabellum/
 ├─ mods/MechaBridge/                 # MelonLoader mod that serves the bridge protocol in game
 ├─ src/mechabellum/
 │  ├─ bridge/                        # Bridge protocol client
-│  ├─ collector/                     # Replay, live memory and tournament data sources
+│  ├─ collector/                     # Replay, live memory, tournament and match history data sources
 │  ├─ contracts/                     # Strongly typed MatchSnapshot
 │  ├─ datasets/                      # JSONL reading/writing and replay export
 │  ├─ features/                      # Player-symmetric baseline features

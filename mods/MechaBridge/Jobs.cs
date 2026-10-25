@@ -2,6 +2,7 @@ using Il2CppGameRiver;
 using Il2CppGameRiver.Client;
 using Il2CppGoogle.Protobuf;
 using Il2CppProtos.Match;
+using RequestFPDetail = Il2CppProtos.FpRecord.RequestFPDetail;
 using MechaBridge.Protocol;
 using CompetitionController = Il2CppGameRiver.Client.Competition.CompetitionController;
 
@@ -16,6 +17,7 @@ internal static class Jobs
     private const int EndedState = 5;
     private const double ReplyTimeoutSeconds = 30;
     private const double DownloadTimeoutSeconds = 120;
+    private const double PersonalHistoryRetrySeconds = 10;
 
     public static IEnumerator<Envelope?> Create(Scheduler scheduler, Envelope request) => request.BodyCase switch
     {
@@ -23,6 +25,7 @@ internal static class Jobs
         Envelope.BodyOneofCase.ListCompetitionsRequest => ListCompetitions(scheduler, request.ListCompetitionsRequest.Page),
         Envelope.BodyOneofCase.CompetitionPageRequest => CompetitionPage(scheduler, request.CompetitionPageRequest),
         Envelope.BodyOneofCase.DownloadReplayRequest => DownloadReplay(scheduler, request.DownloadReplayRequest.ReplayPath),
+        Envelope.BodyOneofCase.PersonalHistoryRequest => PersonalHistory(scheduler),
         _ => Fail("invalid_request", $"unsupported request {request.BodyCase}"),
     };
 
@@ -38,7 +41,7 @@ internal static class Jobs
             StatusReply = new StatusReply
             {
                 ProtocolVersion = 1,
-                ModVersion = "0.1.0",
+                ModVersion = "0.2.0",
                 GameVersion = Game.Version,
                 Online = Game.IsOnline(),
                 ReplayDirectory = Game.ReplayDirectory,
@@ -113,6 +116,35 @@ internal static class Jobs
         foreach (var wait in Scheduler.WaitUntil(() => ResponseHooks.Detail is not null, ReplyTimeoutSeconds, "the tournament page"))
             yield return wait;
         yield return new Envelope { CompetitionPageReply = ResponseHooks.Detail! };
+    }
+
+    /// <summary>
+    /// The player's own match history, through PowerRecordProxy.RequestFPDetail, the request the game sends for the
+    /// profile's power record tab. If no reply comes, for example because the proxy dropped a repeat, the same empty
+    /// message is sent once more through MessageCenterV2, the way <see cref="ListCompetitions"/> sends its pages.
+    /// </summary>
+    private static IEnumerator<Envelope?> PersonalHistory(Scheduler scheduler)
+    {
+        Game.RequireOnline();
+        var proxy = Game.Proxy<PowerRecordProxy>("PowerRecordProxy");
+
+        foreach (var wait in scheduler.WaitForServerSlot())
+            yield return wait;
+        ResponseHooks.ExpectPersonalHistory();
+        proxy.RequestFPDetail();
+        var first = System.Diagnostics.Stopwatch.StartNew();
+        while (ResponseHooks.PersonalHistory is null && first.Elapsed.TotalSeconds < PersonalHistoryRetrySeconds)
+            yield return null;
+        if (ResponseHooks.PersonalHistory is null)
+        {
+            foreach (var wait in scheduler.WaitForServerSlot())
+                yield return wait;
+            if (MessageCenterV2.Instance.SendMsg(new RequestFPDetail().Cast<IMessage>(), null, 1f) == 0)
+                throw new BridgeException("game_error", "the game refused to send the match history request");
+            foreach (var wait in Scheduler.WaitUntil(() => ResponseHooks.PersonalHistory is not null, ReplyTimeoutSeconds, "the match history"))
+                yield return wait;
+        }
+        yield return new Envelope { PersonalHistoryReply = ResponseHooks.PersonalHistory! };
     }
 
     private static IEnumerator<Envelope?> DownloadReplay(Scheduler scheduler, string replayPath)

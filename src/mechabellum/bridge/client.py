@@ -57,6 +57,9 @@ class BridgeClient:
         request = pb.DownloadReplayRequest(replay_path=replay_path)
         return self._call("download_replay_request", request, "download_replay_reply", timeout=180)
 
+    def personal_history(self) -> pb.PersonalHistoryReply:
+        return self._call("personal_history_request", pb.PersonalHistoryRequest(), "personal_history_reply")
+
     def _call(self, request_field: str, request: Any, reply_field: str, timeout: float = 90) -> Any:
         envelope = pb.Envelope(id=next(self._ids))
         getattr(envelope, request_field).CopyFrom(request)

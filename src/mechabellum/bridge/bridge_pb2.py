@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0c\x62ridge.proto\x12\x15mechabellum.bridge.v1\"\xaf\x05\n\x08\x45nvelope\x12\n\n\x02id\x18\x01 \x01(\x04\x12-\n\x05\x65rror\x18\x02 \x01(\x0b\x32\x1c.mechabellum.bridge.v1.ErrorH\x00\x12>\n\x0estatus_request\x18\n \x01(\x0b\x32$.mechabellum.bridge.v1.StatusRequestH\x00\x12:\n\x0cstatus_reply\x18\x0b \x01(\x0b\x32\".mechabellum.bridge.v1.StatusReplyH\x00\x12S\n\x19list_competitions_request\x18\x14 \x01(\x0b\x32..mechabellum.bridge.v1.ListCompetitionsRequestH\x00\x12O\n\x17list_competitions_reply\x18\x15 \x01(\x0b\x32,.mechabellum.bridge.v1.ListCompetitionsReplyH\x00\x12Q\n\x18\x63ompetition_page_request\x18\x16 \x01(\x0b\x32-.mechabellum.bridge.v1.CompetitionPageRequestH\x00\x12M\n\x16\x63ompetition_page_reply\x18\x17 \x01(\x0b\x32+.mechabellum.bridge.v1.CompetitionPageReplyH\x00\x12O\n\x17\x64ownload_replay_request\x18\x1e \x01(\x0b\x32,.mechabellum.bridge.v1.DownloadReplayRequestH\x00\x12K\n\x15\x64ownload_replay_reply\x18\x1f \x01(\x0b\x32*.mechabellum.bridge.v1.DownloadReplayReplyH\x00\x42\x06\n\x04\x62ody\"&\n\x05\x45rror\x12\x0c\n\x04\x63ode\x18\x01 \x01(\t\x12\x0f\n\x07message\x18\x02 \x01(\t\"\x0f\n\rStatusRequest\"\xa0\x01\n\x0bStatusReply\x12\x18\n\x10protocol_version\x18\x01 \x01(\r\x12\x13\n\x0bmod_version\x18\x02 \x01(\t\x12\x14\n\x0cgame_version\x18\x03 \x01(\t\x12\x0e\n\x06online\x18\x04 \x01(\x08\x12\x18\n\x10replay_directory\x18\x05 \x01(\t\x12\"\n\x1aserver_request_interval_ms\x18\x06 \x01(\r\"\'\n\x17ListCompetitionsRequest\x12\x0c\n\x04page\x18\x01 \x01(\x05\"s\n\x15ListCompetitionsReply\x12\x0c\n\x04page\x18\x01 \x01(\x05\x12\x12\n\npage_count\x18\x02 \x01(\x05\x12\x38\n\x0c\x63ompetitions\x18\x03 \x03(\x0b\x32\".mechabellum.bridge.v1.Competition\"x\n\x0b\x43ompetition\x12\n\n\x02id\x18\x01 \x01(\x05\x12\x12\n\nstart_time\x18\x02 \x01(\x03\x12\x0f\n\x07sub_ids\x18\x03 \x03(\x05\x12\x38\n\x06source\x18\x04 \x01(\x0e\x32(.mechabellum.bridge.v1.CompetitionSource\"N\n\x16\x43ompetitionPageRequest\x12\x16\n\x0e\x63ompetition_id\x18\x01 \x01(\x05\x12\x0e\n\x06sub_id\x18\x02 \x01(\x05\x12\x0c\n\x04page\x18\x03 \x01(\x05\"\xbb\x01\n\x14\x43ompetitionPageReply\x12\x16\n\x0e\x63ompetition_id\x18\x01 \x01(\x05\x12\x0e\n\x06sub_id\x18\x02 \x01(\x05\x12\x0c\n\x04page\x18\x03 \x01(\x05\x12\x12\n\npage_count\x18\x04 \x01(\x05\x12\r\n\x05state\x18\x05 \x01(\x05\x12\x14\n\x0creplay_paths\x18\x06 \x03(\t\x12\x34\n\x07results\x18\x07 \x03(\x0b\x32#.mechabellum.bridge.v1.ReplayResult\"R\n\x0cReplayResult\x12\x13\n\x0breplay_path\x18\x01 \x01(\t\x12\x16\n\x0ewinner_user_id\x18\x02 \x01(\x04\x12\x15\n\rloser_user_id\x18\x03 \x01(\x04\",\n\x15\x44ownloadReplayRequest\x12\x13\n\x0breplay_path\x18\x01 \x01(\t\"Q\n\x13\x44ownloadReplayReply\x12\x13\n\x0breplay_path\x18\x01 \x01(\t\x12\x11\n\tfile_path\x18\x02 \x01(\t\x12\x12\n\ndownloaded\x18\x03 \x01(\x08*v\n\x11\x43ompetitionSource\x12\"\n\x1e\x43OMPETITION_SOURCE_UNSPECIFIED\x10\x00\x12\x1e\n\x1a\x43OMPETITION_SOURCE_HISTORY\x10\x01\x12\x1d\n\x19\x43OMPETITION_SOURCE_RECENT\x10\x02\x42\x17\xaa\x02\x14MechaBridge.Protocolb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0c\x62ridge.proto\x12\x15mechabellum.bridge.v1\"\xd1\x06\n\x08\x45nvelope\x12\n\n\x02id\x18\x01 \x01(\x04\x12-\n\x05\x65rror\x18\x02 \x01(\x0b\x32\x1c.mechabellum.bridge.v1.ErrorH\x00\x12>\n\x0estatus_request\x18\n \x01(\x0b\x32$.mechabellum.bridge.v1.StatusRequestH\x00\x12:\n\x0cstatus_reply\x18\x0b \x01(\x0b\x32\".mechabellum.bridge.v1.StatusReplyH\x00\x12S\n\x19list_competitions_request\x18\x14 \x01(\x0b\x32..mechabellum.bridge.v1.ListCompetitionsRequestH\x00\x12O\n\x17list_competitions_reply\x18\x15 \x01(\x0b\x32,.mechabellum.bridge.v1.ListCompetitionsReplyH\x00\x12Q\n\x18\x63ompetition_page_request\x18\x16 \x01(\x0b\x32-.mechabellum.bridge.v1.CompetitionPageRequestH\x00\x12M\n\x16\x63ompetition_page_reply\x18\x17 \x01(\x0b\x32+.mechabellum.bridge.v1.CompetitionPageReplyH\x00\x12O\n\x17\x64ownload_replay_request\x18\x1e \x01(\x0b\x32,.mechabellum.bridge.v1.DownloadReplayRequestH\x00\x12K\n\x15\x64ownload_replay_reply\x18\x1f \x01(\x0b\x32*.mechabellum.bridge.v1.DownloadReplayReplyH\x00\x12Q\n\x18personal_history_request\x18( \x01(\x0b\x32-.mechabellum.bridge.v1.PersonalHistoryRequestH\x00\x12M\n\x16personal_history_reply\x18) \x01(\x0b\x32+.mechabellum.bridge.v1.PersonalHistoryReplyH\x00\x42\x06\n\x04\x62ody\"&\n\x05\x45rror\x12\x0c\n\x04\x63ode\x18\x01 \x01(\t\x12\x0f\n\x07message\x18\x02 \x01(\t\"\x0f\n\rStatusRequest\"\xa0\x01\n\x0bStatusReply\x12\x18\n\x10protocol_version\x18\x01 \x01(\r\x12\x13\n\x0bmod_version\x18\x02 \x01(\t\x12\x14\n\x0cgame_version\x18\x03 \x01(\t\x12\x0e\n\x06online\x18\x04 \x01(\x08\x12\x18\n\x10replay_directory\x18\x05 \x01(\t\x12\"\n\x1aserver_request_interval_ms\x18\x06 \x01(\r\"\'\n\x17ListCompetitionsRequest\x12\x0c\n\x04page\x18\x01 \x01(\x05\"s\n\x15ListCompetitionsReply\x12\x0c\n\x04page\x18\x01 \x01(\x05\x12\x12\n\npage_count\x18\x02 \x01(\x05\x12\x38\n\x0c\x63ompetitions\x18\x03 \x03(\x0b\x32\".mechabellum.bridge.v1.Competition\"x\n\x0b\x43ompetition\x12\n\n\x02id\x18\x01 \x01(\x05\x12\x12\n\nstart_time\x18\x02 \x01(\x03\x12\x0f\n\x07sub_ids\x18\x03 \x03(\x05\x12\x38\n\x06source\x18\x04 \x01(\x0e\x32(.mechabellum.bridge.v1.CompetitionSource\"N\n\x16\x43ompetitionPageRequest\x12\x16\n\x0e\x63ompetition_id\x18\x01 \x01(\x05\x12\x0e\n\x06sub_id\x18\x02 \x01(\x05\x12\x0c\n\x04page\x18\x03 \x01(\x05\"\xbb\x01\n\x14\x43ompetitionPageReply\x12\x16\n\x0e\x63ompetition_id\x18\x01 \x01(\x05\x12\x0e\n\x06sub_id\x18\x02 \x01(\x05\x12\x0c\n\x04page\x18\x03 \x01(\x05\x12\x12\n\npage_count\x18\x04 \x01(\x05\x12\r\n\x05state\x18\x05 \x01(\x05\x12\x14\n\x0creplay_paths\x18\x06 \x03(\t\x12\x34\n\x07results\x18\x07 \x03(\x0b\x32#.mechabellum.bridge.v1.ReplayResult\"R\n\x0cReplayResult\x12\x13\n\x0breplay_path\x18\x01 \x01(\t\x12\x16\n\x0ewinner_user_id\x18\x02 \x01(\x04\x12\x15\n\rloser_user_id\x18\x03 \x01(\x04\",\n\x15\x44ownloadReplayRequest\x12\x13\n\x0breplay_path\x18\x01 \x01(\t\"Q\n\x13\x44ownloadReplayReply\x12\x13\n\x0breplay_path\x18\x01 \x01(\t\x12\x11\n\tfile_path\x18\x02 \x01(\t\x12\x12\n\ndownloaded\x18\x03 \x01(\x08\"\x18\n\x16PersonalHistoryRequest\"M\n\x14PersonalHistoryReply\x12\x35\n\x07matches\x18\x01 \x03(\x0b\x32$.mechabellum.bridge.v1.PersonalMatch\"\xae\x03\n\rPersonalMatch\x12\x0c\n\x04time\x18\x01 \x01(\x03\x12\x0e\n\x06map_id\x18\x02 \x01(\x05\x12\x0e\n\x06reason\x18\x03 \x01(\x05\x12\x13\n\x0breason_name\x18\x04 \x01(\t\x12\r\n\x05point\x18\x05 \x01(\x05\x12\x11\n\telo_point\x18\x06 \x01(\x05\x12\x1a\n\x12is_placement_match\x18\x07 \x01(\x08\x12\x0e\n\x06season\x18\x08 \x01(\x05\x12\x0e\n\x06is_fun\x18\t \x01(\x08\x12\x36\n\x04kind\x18\n \x01(\x0e\x32(.mechabellum.bridge.v1.PersonalMatchKind\x12\x0b\n\x03win\x18\x0b \x01(\x05\x12\r\n\x05index\x18\x0c \x01(\x05\x12\x0c\n\x04rank\x18\r \x01(\x05\x12\x16\n\x0e\x63ompetition_id\x18\x0e \x01(\x05\x12\x19\n\x11\x63ompetition_round\x18\x0f \x01(\x05\x12;\n\x07players\x18\x10 \x03(\x0b\x32*.mechabellum.bridge.v1.PersonalMatchPlayer\x12\x12\n\nmy_user_id\x18\x11 \x01(\x04\x12\x16\n\x0ewinner_user_id\x18\x12 \x01(\x04\"C\n\x13PersonalMatchPlayer\x12\x0f\n\x07user_id\x18\x01 \x01(\x04\x12\r\n\x05index\x18\x02 \x01(\x05\x12\x0c\n\x04name\x18\x03 \x01(\t*v\n\x11\x43ompetitionSource\x12\"\n\x1e\x43OMPETITION_SOURCE_UNSPECIFIED\x10\x00\x12\x1e\n\x1a\x43OMPETITION_SOURCE_HISTORY\x10\x01\x12\x1d\n\x19\x43OMPETITION_SOURCE_RECENT\x10\x02*\xe2\x01\n\x11PersonalMatchKind\x12#\n\x1fPERSONAL_MATCH_KIND_UNSPECIFIED\x10\x00\x12\x1d\n\x19PERSONAL_MATCH_KIND_LOBBY\x10\x01\x12#\n\x1fPERSONAL_MATCH_KIND_COMPETITION\x10\x02\x12\x1d\n\x19PERSONAL_MATCH_KIND_LEVEL\x10\x03\x12\x1e\n\x1aPERSONAL_MATCH_KIND_COURSE\x10\x04\x12%\n!PERSONAL_MATCH_KIND_CHAOS_FACTION\x10\x05\x42\x17\xaa\x02\x14MechaBridge.Protocolb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -32,30 +32,40 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'bridge_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'\252\002\024MechaBridge.Protocol'
-  _globals['_COMPETITIONSOURCE']._serialized_start=1712
-  _globals['_COMPETITIONSOURCE']._serialized_end=1830
+  _globals['_COMPETITIONSOURCE']._serialized_start=2481
+  _globals['_COMPETITIONSOURCE']._serialized_end=2599
+  _globals['_PERSONALMATCHKIND']._serialized_start=2602
+  _globals['_PERSONALMATCHKIND']._serialized_end=2828
   _globals['_ENVELOPE']._serialized_start=40
-  _globals['_ENVELOPE']._serialized_end=727
-  _globals['_ERROR']._serialized_start=729
-  _globals['_ERROR']._serialized_end=767
-  _globals['_STATUSREQUEST']._serialized_start=769
-  _globals['_STATUSREQUEST']._serialized_end=784
-  _globals['_STATUSREPLY']._serialized_start=787
-  _globals['_STATUSREPLY']._serialized_end=947
-  _globals['_LISTCOMPETITIONSREQUEST']._serialized_start=949
-  _globals['_LISTCOMPETITIONSREQUEST']._serialized_end=988
-  _globals['_LISTCOMPETITIONSREPLY']._serialized_start=990
-  _globals['_LISTCOMPETITIONSREPLY']._serialized_end=1105
-  _globals['_COMPETITION']._serialized_start=1107
-  _globals['_COMPETITION']._serialized_end=1227
-  _globals['_COMPETITIONPAGEREQUEST']._serialized_start=1229
-  _globals['_COMPETITIONPAGEREQUEST']._serialized_end=1307
-  _globals['_COMPETITIONPAGEREPLY']._serialized_start=1310
-  _globals['_COMPETITIONPAGEREPLY']._serialized_end=1497
-  _globals['_REPLAYRESULT']._serialized_start=1499
-  _globals['_REPLAYRESULT']._serialized_end=1581
-  _globals['_DOWNLOADREPLAYREQUEST']._serialized_start=1583
-  _globals['_DOWNLOADREPLAYREQUEST']._serialized_end=1627
-  _globals['_DOWNLOADREPLAYREPLY']._serialized_start=1629
-  _globals['_DOWNLOADREPLAYREPLY']._serialized_end=1710
+  _globals['_ENVELOPE']._serialized_end=889
+  _globals['_ERROR']._serialized_start=891
+  _globals['_ERROR']._serialized_end=929
+  _globals['_STATUSREQUEST']._serialized_start=931
+  _globals['_STATUSREQUEST']._serialized_end=946
+  _globals['_STATUSREPLY']._serialized_start=949
+  _globals['_STATUSREPLY']._serialized_end=1109
+  _globals['_LISTCOMPETITIONSREQUEST']._serialized_start=1111
+  _globals['_LISTCOMPETITIONSREQUEST']._serialized_end=1150
+  _globals['_LISTCOMPETITIONSREPLY']._serialized_start=1152
+  _globals['_LISTCOMPETITIONSREPLY']._serialized_end=1267
+  _globals['_COMPETITION']._serialized_start=1269
+  _globals['_COMPETITION']._serialized_end=1389
+  _globals['_COMPETITIONPAGEREQUEST']._serialized_start=1391
+  _globals['_COMPETITIONPAGEREQUEST']._serialized_end=1469
+  _globals['_COMPETITIONPAGEREPLY']._serialized_start=1472
+  _globals['_COMPETITIONPAGEREPLY']._serialized_end=1659
+  _globals['_REPLAYRESULT']._serialized_start=1661
+  _globals['_REPLAYRESULT']._serialized_end=1743
+  _globals['_DOWNLOADREPLAYREQUEST']._serialized_start=1745
+  _globals['_DOWNLOADREPLAYREQUEST']._serialized_end=1789
+  _globals['_DOWNLOADREPLAYREPLY']._serialized_start=1791
+  _globals['_DOWNLOADREPLAYREPLY']._serialized_end=1872
+  _globals['_PERSONALHISTORYREQUEST']._serialized_start=1874
+  _globals['_PERSONALHISTORYREQUEST']._serialized_end=1898
+  _globals['_PERSONALHISTORYREPLY']._serialized_start=1900
+  _globals['_PERSONALHISTORYREPLY']._serialized_end=1977
+  _globals['_PERSONALMATCH']._serialized_start=1980
+  _globals['_PERSONALMATCH']._serialized_end=2410
+  _globals['_PERSONALMATCHPLAYER']._serialized_start=2412
+  _globals['_PERSONALMATCHPLAYER']._serialized_end=2479
 # @@protoc_insertion_point(module_scope)

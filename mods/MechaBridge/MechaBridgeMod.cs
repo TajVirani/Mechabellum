@@ -1,6 +1,6 @@
 using MelonLoader;
 
-[assembly: MelonInfo(typeof(MechaBridge.MechaBridgeMod), "MechaBridge", "0.1.0", "taj")]
+[assembly: MelonInfo(typeof(MechaBridge.MechaBridgeMod), "MechaBridge", "0.2.0", "taj")]
 [assembly: MelonGame("GameRiver", "Mechabellum")]
 
 namespace MechaBridge;

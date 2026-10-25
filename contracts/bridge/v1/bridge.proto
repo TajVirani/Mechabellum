@@ -29,6 +29,9 @@ message Envelope {
 
     DownloadReplayRequest download_replay_request = 30;
     DownloadReplayReply download_replay_reply = 31;
+
+    PersonalHistoryRequest personal_history_request = 40;
+    PersonalHistoryReply personal_history_reply = 41;
   }
   // Field numbers 100 and up are reserved for live game events. They will carry MatchSnapshot v2
   // (contracts/match-snapshot/v2), not a schema of their own; see docs/data-sources.md.
@@ -122,4 +125,60 @@ message DownloadReplayReply {
   string file_path = 2;
   // False when the file already existed and nothing was downloaded.
   bool downloaded = 3;
+}
+
+// The player's own match history, the list the game shows on the profile's power record tab. It is the
+// game's PowerRecordProxy.RequestFPDetail, which takes no arguments: the server decides how many records
+// come back. There is no battle id, so a record is matched to a replay by its players, map and time.
+message PersonalHistoryRequest {}
+
+message PersonalHistoryReply {
+  repeated PersonalMatch matches = 1;
+}
+
+// One Protos.Common.FightRecord, with its raw values. `win` and `index` are passed on as the game sends
+// them because what `win` holds is not confirmed: either the winning side's player index (compare with
+// the players' `index`), or a flag that the player owning the record (the one at `index`) won.
+message PersonalMatch {
+  // FightRecord.Time, believed to be Unix seconds.
+  int64 time = 1;
+  int32 map_id = 2;
+  // FightRecord.Reason, an EFightReason value; reason_name is its name, such as "ReasonNormal" or "GiveUp".
+  int32 reason = 3;
+  string reason_name = 4;
+  // FightRecord.Point (power change) and EloPoint (rating change).
+  int32 point = 5;
+  int32 elo_point = 6;
+  bool is_placement_match = 7;
+  int32 season = 8;
+  bool is_fun = 9;
+  PersonalMatchKind kind = 10;
+  // LobbyRecord or MatchRecord Win and Index; ChaosFactionRecord has Rank instead of Win.
+  int32 win = 11;
+  int32 index = 12;
+  int32 rank = 13;
+  // MatchRecord Id and Round: the tournament and its round.
+  int32 competition_id = 14;
+  int32 competition_round = 15;
+  repeated PersonalMatchPlayer players = 16;
+  // The player whose index equals `index`; 0 when none or several do.
+  uint64 my_user_id = 17;
+  // The winner, set only for two-player records where both readings of `win` name the same player
+  // (that is, when the record's own index is not 0). 0 otherwise.
+  uint64 winner_user_id = 18;
+}
+
+enum PersonalMatchKind {
+  PERSONAL_MATCH_KIND_UNSPECIFIED = 0;
+  PERSONAL_MATCH_KIND_LOBBY = 1;
+  PERSONAL_MATCH_KIND_COMPETITION = 2;
+  PERSONAL_MATCH_KIND_LEVEL = 3;
+  PERSONAL_MATCH_KIND_COURSE = 4;
+  PERSONAL_MATCH_KIND_CHAOS_FACTION = 5;
+}
+
+message PersonalMatchPlayer {
+  uint64 user_id = 1;
+  int32 index = 2;
+  string name = 3;
 }

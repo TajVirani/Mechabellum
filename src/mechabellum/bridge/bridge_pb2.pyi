@@ -12,12 +12,27 @@ class CompetitionSource(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     COMPETITION_SOURCE_UNSPECIFIED: _ClassVar[CompetitionSource]
     COMPETITION_SOURCE_HISTORY: _ClassVar[CompetitionSource]
     COMPETITION_SOURCE_RECENT: _ClassVar[CompetitionSource]
+
+class PersonalMatchKind(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    PERSONAL_MATCH_KIND_UNSPECIFIED: _ClassVar[PersonalMatchKind]
+    PERSONAL_MATCH_KIND_LOBBY: _ClassVar[PersonalMatchKind]
+    PERSONAL_MATCH_KIND_COMPETITION: _ClassVar[PersonalMatchKind]
+    PERSONAL_MATCH_KIND_LEVEL: _ClassVar[PersonalMatchKind]
+    PERSONAL_MATCH_KIND_COURSE: _ClassVar[PersonalMatchKind]
+    PERSONAL_MATCH_KIND_CHAOS_FACTION: _ClassVar[PersonalMatchKind]
 COMPETITION_SOURCE_UNSPECIFIED: CompetitionSource
 COMPETITION_SOURCE_HISTORY: CompetitionSource
 COMPETITION_SOURCE_RECENT: CompetitionSource
+PERSONAL_MATCH_KIND_UNSPECIFIED: PersonalMatchKind
+PERSONAL_MATCH_KIND_LOBBY: PersonalMatchKind
+PERSONAL_MATCH_KIND_COMPETITION: PersonalMatchKind
+PERSONAL_MATCH_KIND_LEVEL: PersonalMatchKind
+PERSONAL_MATCH_KIND_COURSE: PersonalMatchKind
+PERSONAL_MATCH_KIND_CHAOS_FACTION: PersonalMatchKind
 
 class Envelope(_message.Message):
-    __slots__ = ("id", "error", "status_request", "status_reply", "list_competitions_request", "list_competitions_reply", "competition_page_request", "competition_page_reply", "download_replay_request", "download_replay_reply")
+    __slots__ = ("id", "error", "status_request", "status_reply", "list_competitions_request", "list_competitions_reply", "competition_page_request", "competition_page_reply", "download_replay_request", "download_replay_reply", "personal_history_request", "personal_history_reply")
     ID_FIELD_NUMBER: _ClassVar[int]
     ERROR_FIELD_NUMBER: _ClassVar[int]
     STATUS_REQUEST_FIELD_NUMBER: _ClassVar[int]
@@ -28,6 +43,8 @@ class Envelope(_message.Message):
     COMPETITION_PAGE_REPLY_FIELD_NUMBER: _ClassVar[int]
     DOWNLOAD_REPLAY_REQUEST_FIELD_NUMBER: _ClassVar[int]
     DOWNLOAD_REPLAY_REPLY_FIELD_NUMBER: _ClassVar[int]
+    PERSONAL_HISTORY_REQUEST_FIELD_NUMBER: _ClassVar[int]
+    PERSONAL_HISTORY_REPLY_FIELD_NUMBER: _ClassVar[int]
     id: int
     error: Error
     status_request: StatusRequest
@@ -38,7 +55,9 @@ class Envelope(_message.Message):
     competition_page_reply: CompetitionPageReply
     download_replay_request: DownloadReplayRequest
     download_replay_reply: DownloadReplayReply
-    def __init__(self, id: _Optional[int] = ..., error: _Optional[_Union[Error, _Mapping]] = ..., status_request: _Optional[_Union[StatusRequest, _Mapping]] = ..., status_reply: _Optional[_Union[StatusReply, _Mapping]] = ..., list_competitions_request: _Optional[_Union[ListCompetitionsRequest, _Mapping]] = ..., list_competitions_reply: _Optional[_Union[ListCompetitionsReply, _Mapping]] = ..., competition_page_request: _Optional[_Union[CompetitionPageRequest, _Mapping]] = ..., competition_page_reply: _Optional[_Union[CompetitionPageReply, _Mapping]] = ..., download_replay_request: _Optional[_Union[DownloadReplayRequest, _Mapping]] = ..., download_replay_reply: _Optional[_Union[DownloadReplayReply, _Mapping]] = ...) -> None: ...
+    personal_history_request: PersonalHistoryRequest
+    personal_history_reply: PersonalHistoryReply
+    def __init__(self, id: _Optional[int] = ..., error: _Optional[_Union[Error, _Mapping]] = ..., status_request: _Optional[_Union[StatusRequest, _Mapping]] = ..., status_reply: _Optional[_Union[StatusReply, _Mapping]] = ..., list_competitions_request: _Optional[_Union[ListCompetitionsRequest, _Mapping]] = ..., list_competitions_reply: _Optional[_Union[ListCompetitionsReply, _Mapping]] = ..., competition_page_request: _Optional[_Union[CompetitionPageRequest, _Mapping]] = ..., competition_page_reply: _Optional[_Union[CompetitionPageReply, _Mapping]] = ..., download_replay_request: _Optional[_Union[DownloadReplayRequest, _Mapping]] = ..., download_replay_reply: _Optional[_Union[DownloadReplayReply, _Mapping]] = ..., personal_history_request: _Optional[_Union[PersonalHistoryRequest, _Mapping]] = ..., personal_history_reply: _Optional[_Union[PersonalHistoryReply, _Mapping]] = ...) -> None: ...
 
 class Error(_message.Message):
     __slots__ = ("code", "message")
@@ -149,3 +168,63 @@ class DownloadReplayReply(_message.Message):
     file_path: str
     downloaded: bool
     def __init__(self, replay_path: _Optional[str] = ..., file_path: _Optional[str] = ..., downloaded: _Optional[bool] = ...) -> None: ...
+
+class PersonalHistoryRequest(_message.Message):
+    __slots__ = ()
+    def __init__(self) -> None: ...
+
+class PersonalHistoryReply(_message.Message):
+    __slots__ = ("matches",)
+    MATCHES_FIELD_NUMBER: _ClassVar[int]
+    matches: _containers.RepeatedCompositeFieldContainer[PersonalMatch]
+    def __init__(self, matches: _Optional[_Iterable[_Union[PersonalMatch, _Mapping]]] = ...) -> None: ...
+
+class PersonalMatch(_message.Message):
+    __slots__ = ("time", "map_id", "reason", "reason_name", "point", "elo_point", "is_placement_match", "season", "is_fun", "kind", "win", "index", "rank", "competition_id", "competition_round", "players", "my_user_id", "winner_user_id")
+    TIME_FIELD_NUMBER: _ClassVar[int]
+    MAP_ID_FIELD_NUMBER: _ClassVar[int]
+    REASON_FIELD_NUMBER: _ClassVar[int]
+    REASON_NAME_FIELD_NUMBER: _ClassVar[int]
+    POINT_FIELD_NUMBER: _ClassVar[int]
+    ELO_POINT_FIELD_NUMBER: _ClassVar[int]
+    IS_PLACEMENT_MATCH_FIELD_NUMBER: _ClassVar[int]
+    SEASON_FIELD_NUMBER: _ClassVar[int]
+    IS_FUN_FIELD_NUMBER: _ClassVar[int]
+    KIND_FIELD_NUMBER: _ClassVar[int]
+    WIN_FIELD_NUMBER: _ClassVar[int]
+    INDEX_FIELD_NUMBER: _ClassVar[int]
+    RANK_FIELD_NUMBER: _ClassVar[int]
+    COMPETITION_ID_FIELD_NUMBER: _ClassVar[int]
+    COMPETITION_ROUND_FIELD_NUMBER: _ClassVar[int]
+    PLAYERS_FIELD_NUMBER: _ClassVar[int]
+    MY_USER_ID_FIELD_NUMBER: _ClassVar[int]
+    WINNER_USER_ID_FIELD_NUMBER: _ClassVar[int]
+    time: int
+    map_id: int
+    reason: int
+    reason_name: str
+    point: int
+    elo_point: int
+    is_placement_match: bool
+    season: int
+    is_fun: bool
+    kind: PersonalMatchKind
+    win: int
+    index: int
+    rank: int
+    competition_id: int
+    competition_round: int
+    players: _containers.RepeatedCompositeFieldContainer[PersonalMatchPlayer]
+    my_user_id: int
+    winner_user_id: int
+    def __init__(self, time: _Optional[int] = ..., map_id: _Optional[int] = ..., reason: _Optional[int] = ..., reason_name: _Optional[str] = ..., point: _Optional[int] = ..., elo_point: _Optional[int] = ..., is_placement_match: _Optional[bool] = ..., season: _Optional[int] = ..., is_fun: _Optional[bool] = ..., kind: _Optional[_Union[PersonalMatchKind, str]] = ..., win: _Optional[int] = ..., index: _Optional[int] = ..., rank: _Optional[int] = ..., competition_id: _Optional[int] = ..., competition_round: _Optional[int] = ..., players: _Optional[_Iterable[_Union[PersonalMatchPlayer, _Mapping]]] = ..., my_user_id: _Optional[int] = ..., winner_user_id: _Optional[int] = ...) -> None: ...
+
+class PersonalMatchPlayer(_message.Message):
+    __slots__ = ("user_id", "index", "name")
+    USER_ID_FIELD_NUMBER: _ClassVar[int]
+    INDEX_FIELD_NUMBER: _ClassVar[int]
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    user_id: int
+    index: int
+    name: str
+    def __init__(self, user_id: _Optional[int] = ..., index: _Optional[int] = ..., name: _Optional[str] = ...) -> None: ...
