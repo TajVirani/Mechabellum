@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from mechabellum.collector.replay.result import write_result
+from mechabellum.collector.replay.result import result_path, write_result
 from mechabellum.visualizer import cache as cache_module
 from mechabellum.visualizer import summaries as summaries_module
 from mechabellum.visualizer import watcher as watcher_module
@@ -67,7 +67,7 @@ def test_replay_scan_is_recursive() -> None:
 def test_watcher_uses_the_cache_and_waits_for_stable_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     replays = tmp_path / "Replay"
     replays.mkdir()
-    shutil.copy2(REPLAYS / WIN, replays / WIN)
+    _copy_replay(REPLAYS / WIN, replays / WIN)
     parsed: list[Path] = []
     real = summaries_module.summarize_replay
 
@@ -149,7 +149,7 @@ def test_cache_key_follows_the_data_files() -> None:
 def test_watcher_resends_the_full_set_when_a_replay_is_deleted(tmp_path: Path) -> None:
     replays = tmp_path / "Replay"
     replays.mkdir()
-    shutil.copy2(REPLAYS / WIN, replays / WIN)
+    _copy_replay(REPLAYS / WIN, replays / WIN)
     nix = "2340_20261024--67160210_[Nix]VS[Sleep Deprived].grbr"
     shutil.copy2(REPLAYS / "2.0.0.5.2340" / nix, replays / nix)
     cache = SummaryCache(tmp_path / "v.sqlite")
@@ -199,10 +199,9 @@ def test_scan_reports_cached_rows_first_then_parsed_batches(tmp_path: Path, monk
     # Warm the cache with one replay only.
     warm = tmp_path / "Warm"
     warm.mkdir()
-    shutil.copy2(replays / WIN, warm / WIN)
+    _copy_replay(replays / WIN, warm / WIN)
     ReplayWatcher(warm, cache, lambda _: None).scan_existing()
-    stat = (replays / WIN).stat()
-    cache.store(replays / WIN, stat.st_size, stat.st_mtime_ns, cache.lookup(warm / WIN, *_state(warm / WIN)))
+    cache.store(replays / WIN, *_state(replays / WIN), cache.lookup(warm / WIN, *_state(warm / WIN)))
     monkeypatch.setattr(watcher_module, "INDEX_BATCH_SECONDS", 0.0)
 
     calls: list[tuple[list[str], int, int, bool]] = []
@@ -220,6 +219,17 @@ def test_scan_reports_cached_rows_first_then_parsed_batches(tmp_path: Path, monk
     cache.close()
 
 
+def _copy_replay(source: Path, target: Path) -> None:
+    """Copy a replay with its result file, which names the winner of a 2331 replay that doesn't record it."""
+    shutil.copy2(source, target)
+    if result_path(source).is_file():
+        shutil.copy2(result_path(source), result_path(target))
+
+
 def _state(path: Path) -> tuple[int, int]:
+    """The watcher's (size, mtime) of a replay: a result file beside it counts as a change."""
     stat = path.stat()
-    return stat.st_size, stat.st_mtime_ns
+    mtime_ns = stat.st_mtime_ns
+    if result_path(path).is_file():
+        mtime_ns = max(mtime_ns, result_path(path).stat().st_mtime_ns)
+    return stat.st_size, mtime_ns

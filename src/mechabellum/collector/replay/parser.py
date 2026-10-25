@@ -33,6 +33,7 @@ from .result import read_winner_user_id
 T = TypeVar("T")
 XSI_TYPE = "{http://www.w3.org/2001/XMLSchema-instance}type"
 OPENING_LINEUP_ACTION = "PAD_ChooseAdvanceTeam"
+SURRENDER_ACTION = "PAD_GiveUp"
 ACTION_TIME_FIELDS = ("Time", "LocalTime")
 FIGHT_RESULTS: dict[str, FightResult] = {"win": "Win", "lose": "Lose", "deuce": "Deuce"}
 
@@ -508,19 +509,41 @@ def _fight_result(value: str | None) -> FightResult | None:
 
 
 def _winner_index(root: ElementTree.Element, players: list[PlayerHistory], path: Path) -> int | None:
-    """The player ranked 0 in the final teamRanks, or else the winner a result file next to the replay names.
+    """The match winner, or None when the replay does not say. In order of trust:
 
-    Fight report scores cannot be used: the MatchSnapshotData for round r reports fight r - 1, so the last one
-    describes the second-to-last fight and the deciding fight has no report. Replays downloaded from the server
-    leave teamRanks empty; `mecha fetch-replays` writes their result file from the tournament ranking.
+    1. A result file next to the replay: `mecha fetch-replays` writes one from the server's tournament ranking.
+    2. A surrender: the other player of a 1v1 wins.
+    3. The deciding fight's result. Only formats since 2340 record it: their roundFightResult holds the whole
+       match's history, ending with the last fight, in every record. Older formats record fight r in record r + 1,
+       and no record follows the last fight.
+
+    Not teamRanks: it is the reactor-core standing as of the previous record, not a result, so it names the
+    player who led one fight before the end. Nor the fight reports: the MatchSnapshotData for round r reports
+    fight r - 1, so the deciding fight has none.
     """
-    snapshots = root.findall("./matchDatas/MatchSnapshotData")
-    ranks = [_int_text(item) for item in snapshots[-1].findall("./teamRanks/int")] if snapshots else []
-    if len(ranks) == len(players) and ranks.count(0) == 1:
-        return ranks.index(0)
     winner = read_winner_user_id(path)
     matches = [index for index, player in enumerate(players) if winner is not None and player.player_id == winner]
-    return matches[0] if len(matches) == 1 else None
+    if winner is not None:
+        return matches[0] if len(matches) == 1 else None
+    if len(players) != 2:
+        return None
+    surrendered = [index for index, node in enumerate(root.findall("./playerRecords/PlayerRecord")) if _gave_up(node)]
+    if len(surrendered) == 1:
+        return 1 - surrendered[0]
+    last_results = []
+    for player in players:
+        history = next(
+            (item.recorded_fight_results for item in player.rounds.values() if item.recorded_fight_results), None
+        )
+        last_results.append(history[-1] if history else None)
+    return last_results.index("Win") if last_results.count("Win") == 1 and "Lose" in last_results else None
+
+
+def _gave_up(player_node: ElementTree.Element) -> bool:
+    return any(
+        action.attrib.get(XSI_TYPE) == SURRENDER_ACTION
+        for action in player_node.findall("./playerRoundRecords/PlayerRoundRecord/actionRecords/*")
+    )
 
 
 def _text(parent: ElementTree.Element | None, name: str) -> str | None:

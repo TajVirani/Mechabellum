@@ -5,6 +5,8 @@ from mechabellum.collector.replay.result import write_result
 from mechabellum.contracts import snapshot_to_dict, validate_snapshot
 from mechabellum.datasets import export_replay_directory, load_snapshots
 
+SURRENDER = '<MatchActionData xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="PAD_GiveUp" />'
+
 
 def _write_replay(path: Path) -> None:
     # Record 1 is the empty opening board; record 2 holds the board at the end of fight 1 and its result.
@@ -15,15 +17,19 @@ def _write_replay(path: Path) -> None:
     )
     technology = '<UnitData><id>3</id><techs><tech data="30101" /></techs></UnitData>'
 
-    def record(round_number: int, core: int, supply: int, result: str, units: str = "", techs: str = "") -> str:
+    def record(
+        round_number: int, core: int, supply: int, result: str, units: str = "", techs: str = "", actions: str = ""
+    ) -> str:
         return (
-            f"<PlayerRoundRecord><round>{round_number}</round><playerData><reactorCore>{core}</reactorCore>"
+            f"<PlayerRoundRecord><round>{round_number}</round><actionRecords>{actions}</actionRecords>"
+            f"<playerData><reactorCore>{core}</reactorCore>"
             f"<supply>{supply}</supply><preRoundFightResult>{result}</preRoundFightResult><units>{units}</units>"
             f"<activeTechnologies>{techs}</activeTechnologies></playerData></PlayerRoundRecord>"
         )
 
     records_a = record(1, 4500, 0, "Win") + record(2, 4500, 100, "Win", unit, technology)
-    records_b = record(1, 4300, 0, "Win") + record(2, 4300, 50, "Lose")
+    # Older formats never record the deciding fight; B surrenders in round 2, so A wins.
+    records_b = record(1, 4300, 0, "Win") + record(2, 4300, 50, "Lose", actions=SURRENDER)
     xml = f"""<?xml version="1.0" encoding="utf-8"?>
 <BattleRecord>
   <playerRecords>
@@ -71,9 +77,7 @@ def test_dataset_export_reads_version_folders_and_counts_matches_without_a_winne
     unranked = tmp_path / "2.0.0.4.2331" / "3.rep.grbr"
     _write_replay(unranked)
     unranked.write_bytes(
-        unranked.read_bytes()
-        .replace(b"<teamRanks><int>0</int><int>1</int></teamRanks>", b"<teamRanks />")
-        .replace(b"fixture-battle", b"other-battle")
+        unranked.read_bytes().replace(SURRENDER.encode(), b"").replace(b"fixture-battle", b"other-battle")
     )
     output = tmp_path / "snapshots.jsonl"
     summary = export_replay_directory(tmp_path, output)
@@ -85,11 +89,11 @@ def test_dataset_export_reads_version_folders_and_counts_matches_without_a_winne
 
 
 def test_server_replay_winner_comes_from_its_result_file(tmp_path: Path) -> None:
-    # Replays downloaded from the server leave teamRanks empty; fetch-replays writes the winner next to them.
+    # Replays downloaded from the server don't say who won; fetch-replays writes the winner next to them.
     replay_path = tmp_path / "2.0.0.4.2331" / "1.rep.grbr"
     replay_path.parent.mkdir()
     _write_replay(replay_path)
-    replay_path.write_bytes(replay_path.read_bytes().replace(b"<int>0</int><int>1</int>", b""))
+    replay_path.write_bytes(replay_path.read_bytes().replace(SURRENDER.encode(), b""))
     assert parse_replay(replay_path).winner_index is None
 
     write_result(replay_path, 2, 1, "tournament 1/1")
@@ -208,14 +212,46 @@ def test_legacy_history_and_equipment(tmp_path: Path) -> None:
     assert snapshot.match.reinforcement_offer is None
 
 
-def test_winner_comes_from_final_team_ranks(tmp_path: Path) -> None:
+def test_team_ranks_do_not_name_the_winner(tmp_path: Path) -> None:
+    # teamRanks is the reactor-core standing one record before the end, not the result. Without a surrender, an
+    # older format's replay has no record of the deciding fight, so the winner is unknown.
     replay_path = tmp_path / "fixture.grbr"
     _write_replay(replay_path)
-    # The last fight report favors A, but it describes the second-to-last fight; the final ranks decide.
-    xml = replay_path.read_bytes().replace(
-        b"<teamRanks><int>0</int><int>1</int></teamRanks>", b"<teamRanks><int>1</int><int>0</int></teamRanks>"
+    replay_path.write_bytes(replay_path.read_bytes().replace(SURRENDER.encode(), b""))
+    assert parse_replay(replay_path).winner_index is None
+
+
+def test_surrender_decides_the_winner(tmp_path: Path) -> None:
+    replay_path = tmp_path / "fixture.grbr"
+    _write_replay(replay_path)
+    # A leads in teamRanks and the last fight report, but A gave up (in its first record) instead of B.
+    xml = replay_path.read_bytes().replace(SURRENDER.encode(), b"")
+    replay_path.write_bytes(
+        xml.replace(b"<actionRecords></actionRecords>", f"<actionRecords>{SURRENDER}</actionRecords>".encode(), 1)
     )
-    replay_path.write_bytes(xml)
+    assert parse_replay(replay_path).winner_index == 1
+
+
+def test_v2340_winner_is_the_last_fight_winner_not_the_team_rank_leader(tmp_path: Path) -> None:
+    # Like 20261024--67166588: P0 led the core standing (teamRanks 0, 1) and then lost the deciding fight.
+    replay_path = tmp_path / "fixture.grbr"
+    _write_v2340_replay(replay_path)
+    swapped = (
+        replay_path.read_bytes()
+        .replace(b"<FightResultType>Win</FightResultType>", b"<FightResultType>W</FightResultType>")
+        .replace(b"<FightResultType>Lose</FightResultType>", b"<FightResultType>Win</FightResultType>")
+        .replace(b"<FightResultType>W</FightResultType>", b"<FightResultType>Lose</FightResultType>")
+    )
+    assert b"<teamRanks><int>0</int><int>1</int></teamRanks>" in swapped
+    replay_path.write_bytes(swapped)
+    assert parse_replay(replay_path).winner_index == 1
+
+
+def test_result_file_outranks_the_replay(tmp_path: Path) -> None:
+    replay_path = tmp_path / "1.rep.grbr"
+    _write_v2340_replay(replay_path)
+    assert parse_replay(replay_path).winner_index == 0
+    write_result(replay_path, 2, 1, "tournament 1/1")
     assert parse_replay(replay_path).winner_index == 1
 
 
