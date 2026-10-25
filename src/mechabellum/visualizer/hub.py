@@ -78,6 +78,8 @@ class Hub:
         self._round_frames: dict[int, dict[str, Any]] = {}
         self._round_battle: str | None = None
         self._predictions: dict[str, Any] = {"battleId": None, "rows": []}
+        # The latest `recommendations` payload (recommend.py), or None before the first one.
+        self._recommendations: dict[str, Any] | None = None
 
     # ---- reading ---------------------------------------------------------------------------------------------
 
@@ -195,6 +197,16 @@ class Hub:
             self._predictions["rows"].append(row)
             self._send("prediction", {"battleId": battle_id, **row})
 
+    def set_recommendations(self, payload: dict[str, Any]) -> None:
+        with self._lock:
+            self._recommendations = payload
+            self._send("recommendations", payload)
+
+    @property
+    def recommendations(self) -> dict[str, Any] | None:
+        with self._lock:
+            return self._recommendations
+
     def set_model_available(self, available: bool) -> None:
         """Correct `modelAvailable`; every client gets a fresh catch-up, since only `hello` carries it."""
         with self._lock:
@@ -234,6 +246,8 @@ class Hub:
             events.extend(("frame", self._round_frames[number]) for number in sorted(self._round_frames))
             events.append(("frame", self._frame))
             events.append(("predictions", self._predictions))
+            if self._recommendations is not None:
+                events.append(("recommendations", self._recommendations))
         return events
 
     def _replace_summaries(self, rows: Iterable[dict[str, Any]]) -> None:

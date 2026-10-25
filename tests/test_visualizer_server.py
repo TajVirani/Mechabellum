@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 import urllib.error
 import urllib.request
 from collections.abc import Iterator
@@ -250,3 +251,48 @@ def test_serves_before_the_replay_folder_is_indexed(tmp_path: Path, monkeypatch:
     finally:
         release.set()
         visualizer.close()
+
+
+def get_json(url: str) -> dict:
+    with urllib.request.urlopen(url, timeout=10) as response:
+        assert response.headers["Content-Type"].startswith("application/json")
+        return json.load(response)
+
+
+def test_winning_boards_api(server: Visualizer) -> None:
+    data = get_json(server.url + "api/winning-boards?minN=2")
+    assert data["mode"] == "Normal" and data["minSample"] == 2
+    assert list(data["bands"]) == ["early", "mid", "late"]
+    early = data["bands"]["early"]
+    # Three Normal fixture replays, both players each: six early observations, three of them wins.
+    assert (early["n"], early["wins"], early["baselineWinRate"]) == (6, 3, 0.5)
+    assert early["units"] and all(0 < row["pickRate"] <= 1 for row in early["units"])
+    assert all(row["thin"] == (row["n"] < 2) for row in early["units"] + early["technologies"])
+    mine = get_json(server.url + f"api/winning-boards?player={LOCAL_PLAYER}")["bands"]["early"]
+    assert mine["n"] == 3
+    assert get_json(server.url + "api/winning-boards?mode=AsyncBattle")["bands"]["early"]["n"] == 0
+    assert get_json(server.url + "api/winning-boards?versions=9.9.9")["bands"]["early"]["n"] == 0
+
+
+def test_counters_api(server: Visualizer) -> None:
+    data = get_json(server.url + "api/counters?minN=1&top=3")
+    assert data["band"] == "all" and data["n"] == 6 and "not a causal" in data["note"]
+    assert data["enemies"] and all(len(entry["rows"]) <= 3 for entry in data["enemies"])
+    enemy = data["enemies"][0]["enemyUnitId"]
+    one = get_json(server.url + f"api/counters?enemy={enemy}&band=early&top=0")
+    assert [entry["enemyUnitId"] for entry in one["enemies"]] == [enemy] and one["band"] == "early"
+    for query in ("band=nope", "minN=0", "enemy=x", "top=-1"):
+        with pytest.raises(urllib.error.HTTPError) as error:
+            urllib.request.urlopen(server.url + "api/counters?" + query, timeout=5)
+        assert error.value.code == 400, query
+
+
+def test_recommendations_api_without_a_model(server: Visualizer) -> None:
+    for _ in range(100):
+        payload = get_json(server.url + "api/recommendations")["recommendations"]
+        if payload is not None and payload["round"] == 10 and payload["phase"] == "fight_over":
+            break
+        time.sleep(0.05)
+    assert payload["modelAvailable"] is False and payload["localIndex"] == 0
+    assert [player["index"] for player in payload["players"]] == [0]
+    assert payload["players"][0]["rows"] == [] and "counters" in payload["players"][0]

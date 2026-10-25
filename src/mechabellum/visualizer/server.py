@@ -1,4 +1,5 @@
-"""The Visualizer's HTTP server: static files, the `/events` SSE stream and `/api/local-player`.
+"""The Visualizer's HTTP server: static files, the `/events` SSE stream, `/api/local-player` and the read-only
+insight endpoints (`/api/winning-boards`, `/api/counters`, `/api/recommendations`).
 
 Binds 127.0.0.1 only. Nothing here talks to the game server.
 """
@@ -15,11 +16,13 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import unquote, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
 from .cache import CONFIG_NAME, DATABASE_NAME, SummaryCache, VisualizerConfig, default_data_dir
 from .hub import CLOSED, Hub
-from .live import LiveProcessor, load_predictor, model_looks_available, run_bridge_probe, run_memory, run_playback
+from .insights import ALL_BANDS, BANDS, COUNTER_TOP, MIN_SAMPLE, Insights, SummaryFilter
+from .live import load_model, model_looks_available, predictor_from_artifact, run_bridge_probe, run_memory, run_playback
+from .recommend import LiveRecommender, RecommendingProcessor
 from .roles import catalog
 from .watcher import ReplayWatcher
 
@@ -91,7 +94,9 @@ class Visualizer:
             live_source=live_source,
             local_player_id=self.config.local_player_id,
         )
-        self.processor = LiveProcessor(self.hub, self.cache)
+        self.insights = Insights(self.hub.summaries_snapshot)
+        self.recommender = LiveRecommender(self.hub, self.insights)
+        self.processor = RecommendingProcessor(self.hub, self.cache, self.recommender)
         self.watcher = (
             None
             if replay_dir is None
@@ -125,6 +130,7 @@ class Visualizer:
             self.watcher.start()
         options = self.options
         if options.live:
+            self._spawn("recommend", self.recommender.run, self.stop_event)
             self._spawn("live", self._run_live)
             if options.playback is None:
                 self._spawn("bridge-probe", run_bridge_probe, self.hub, self.stop_event)
@@ -146,11 +152,13 @@ class Visualizer:
     def _run_live(self) -> None:
         options = self.options
         if self.model_expected:
-            predictor = load_predictor(options.model)
-            if predictor is None:
+            # One artifact serves both the per-round predictions and the recommendations.
+            artifact = load_model(options.model)
+            if artifact is None:
                 print(f"Win probability model unavailable: {options.model}", file=sys.stderr, flush=True)
                 self.hub.set_model_available(False)
-            self.processor.set_predictor(predictor)
+            self.processor.set_predictor(None if artifact is None else predictor_from_artifact(artifact, options.model))
+            self.recommender.set_artifact(artifact)
         if options.playback is not None:
             run_playback(self.processor, self.hub, options.playback, self.stop_event, speed=options.playback_speed)
         else:
@@ -228,6 +236,10 @@ class _Handler(BaseHTTPRequestHandler):
             self._json(
                 HTTPStatus.OK, {"localPlayerId": hub.local_player_id, "suggestedPlayerId": hub.suggested_player_id}
             )
+        elif path in ("/api/winning-boards", "/api/counters"):
+            self._insight(path, parse_qs(urlsplit(self.path).query))
+        elif path == "/api/recommendations":
+            self._json(HTTPStatus.OK, {"recommendations": self.server.visualizer.hub.recommendations})
         else:
             self._static(path)
 
@@ -256,6 +268,39 @@ class _Handler(BaseHTTPRequestHandler):
             return
         self.server.visualizer.set_local_player(player_id)
         self._json(HTTPStatus.OK, {"localPlayerId": player_id})
+
+    def _insight(self, path: str, query: dict[str, list[str]]) -> None:
+        """`/api/winning-boards` or `/api/counters`, computed from the current summaries (cached per change)."""
+        insights = self.server.visualizer.insights
+        try:
+            summary_filter = SummaryFilter(
+                mode=_query_text(query, "mode") or "Normal",
+                versions=frozenset(_query_list(query, "versions")),
+                date_from=_query_text(query, "from"),
+                date_to=_query_text(query, "to"),
+            )
+            player_id = _query_text(query, "player")
+            min_sample = _query_int(query, "minN", MIN_SAMPLE, low=1)
+            if path == "/api/winning-boards":
+                result = insights.winning_boards(summary_filter, player_id=player_id, min_sample=min_sample)
+            else:
+                band = _query_text(query, "band") or ALL_BANDS
+                if band != ALL_BANDS and band not in BANDS:
+                    raise ValueError(f"unknown band {band!r}")
+                enemies = [int(item) for item in _query_list(query, "enemy")] or None
+                top = _query_int(query, "top", COUNTER_TOP, low=0)
+                result = insights.counters(
+                    summary_filter,
+                    band=band,
+                    player_id=player_id,
+                    enemies=enemies,
+                    min_sample=min_sample,
+                    top=top or None,
+                )
+        except ValueError as error:
+            self._json(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+            return
+        self._json(HTTPStatus.OK, result)
 
     # ---- responses -------------------------------------------------------------------------------------------
 
@@ -337,6 +382,32 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(body)
+
+
+def _query_text(query: dict[str, list[str]], name: str) -> str | None:
+    values = query.get(name)
+    value = values[-1].strip() if values else ""
+    if len(value) > 64 or not value.isprintable():
+        raise ValueError(f"invalid {name}")
+    return value or None
+
+
+def _query_list(query: dict[str, list[str]], name: str) -> list[str]:
+    """A comma-separated (or repeated) parameter."""
+    items = [item.strip() for value in query.get(name, []) for item in value.split(",")]
+    if len(items) > 64 or any(len(item) > 64 or not item.isprintable() for item in items):
+        raise ValueError(f"invalid {name}")
+    return [item for item in items if item]
+
+
+def _query_int(query: dict[str, list[str]], name: str, default: int, *, low: int) -> int:
+    text = _query_text(query, name)
+    if text is None:
+        return default
+    value = int(text)
+    if value < low:
+        raise ValueError(f"{name} must be at least {low}")
+    return value
 
 
 def _server_version() -> str:

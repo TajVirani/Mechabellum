@@ -41,14 +41,25 @@ def model_looks_available(model_path: Path) -> bool:
     return model_path.is_file() and all(find_spec(module) is not None for module in modules)
 
 
-def load_predictor(model_path: Path) -> WinPredictor | None:
-    """The trained model's per-player win probabilities, or None without the `ml` extra or the artifact."""
+def load_model(model_path: Path) -> dict[str, Any] | None:
+    """The trained model artifact, or None without the `ml` extra or the artifact."""
     try:
-        from ..inference import load_artifact, predict_snapshot
+        from ..inference import load_artifact
 
-        artifact = load_artifact(model_path)
+        return load_artifact(model_path)
     except Exception:
         return None
+
+
+def load_predictor(model_path: Path) -> WinPredictor | None:
+    """The trained model's per-player win probabilities, or None without the `ml` extra or the artifact."""
+    artifact = load_model(model_path)
+    return None if artifact is None else predictor_from_artifact(artifact, model_path)
+
+
+def predictor_from_artifact(artifact: dict[str, Any], model_path: Path) -> WinPredictor:
+    """Per-player win probabilities from a loaded artifact, as `mecha live-predict` computes them."""
+    from ..inference import predict_snapshot
 
     def predict(snapshot: MatchSnapshot) -> list[float]:
         result = predict_snapshot(artifact, snapshot, model_path)
