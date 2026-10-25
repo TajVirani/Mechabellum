@@ -6,6 +6,7 @@ pytest.importorskip("google.protobuf")
 
 from mechabellum.bridge import BridgeClient, BridgeError  # noqa: E402
 from mechabellum.bridge import bridge_pb2 as pb  # noqa: E402
+from mechabellum.collector.replay.result import read_winner_user_id, result_path  # noqa: E402
 from mechabellum.collector.tournament import fetch_replays  # noqa: E402
 
 CURRENT = "2.0.0.5.2340"
@@ -22,6 +23,8 @@ class FakeBridge:
         self.failures = dict(failures or {})
         self.downloads: list[str] = []
         self.states: dict[tuple[int, int], int] = {}
+        self.winners: dict[str, int] = {}
+        self.directory: Path | None = None
 
     def _maybe_fail(self, key: object) -> None:
         if self.failures.get(key, 0) > 0:
@@ -47,11 +50,18 @@ class FakeBridge:
             page_count=len(pages),
             state=self.states.get((competition_id, sub_id), 5),
             replay_paths=pages[page - 1],
+            results=[
+                pb.ReplayResult(replay_path=path, winner_user_id=self.winners[path], loser_user_id=7)
+                for path in pages[page - 1]
+                if path in self.winners
+            ],
         )
 
     def download_replay(self, replay_path: str) -> pb.DownloadReplayReply:
         self._maybe_fail(replay_path)
         self.downloads.append(replay_path)
+        if self.directory is not None:
+            _store(self.directory, [replay_path])
         return pb.DownloadReplayReply(replay_path=replay_path, file_path=f"x/{replay_path}.grbr", downloaded=True)
 
 
@@ -176,6 +186,23 @@ def test_a_second_failure_stops_the_run(tmp_path: Path) -> None:
     assert bridge.downloads == paths[:1]
     assert summary.failed
     assert "simulated failure" in summary.stop_reason
+
+
+def test_results_are_written_for_downloaded_and_present_replays_without_one(tmp_path: Path) -> None:
+    fresh, present, labeled = _paths(CURRENT, 100, 3)
+    _store(tmp_path, [present, labeled])
+    kept = result_path(tmp_path / f"{labeled}.grbr")
+    kept.write_text('{"winner_user_id": "1"}', encoding="utf-8")
+    bridge = FakeBridge({1: (10, {1: [[fresh, present, labeled]]})})
+    bridge.directory = tmp_path
+    bridge.winners = {fresh: 41, present: 42, labeled: 43}
+
+    summary = fetch_replays(bridge, tmp_path, [CURRENT])
+
+    assert summary.labeled == 2
+    assert read_winner_user_id(tmp_path / f"{fresh}.grbr") == "41"
+    assert read_winner_user_id(tmp_path / f"{present}.grbr") == "42"
+    assert read_winner_user_id(tmp_path / f"{labeled}.grbr") == "1"
 
 
 def test_invalid_versions_are_rejected(tmp_path: Path) -> None:

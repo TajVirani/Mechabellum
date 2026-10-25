@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from mechabellum.collector.replay import parse_replay, select_round
+from mechabellum.collector.replay.result import write_result
 from mechabellum.contracts import snapshot_to_dict, validate_snapshot
 from mechabellum.datasets import export_replay_directory, load_snapshots
 
@@ -81,6 +82,20 @@ def test_dataset_export_reads_version_folders_and_counts_matches_without_a_winne
     # The folder names the game version only when its replay format matches the file's.
     assert snapshots[0].game_build.game_version == "1.11.0.2a"
     assert parse_replay(tmp_path / "2.0.0.4.2331" / "2.rep.grbr").game_version is None
+
+
+def test_server_replay_winner_comes_from_its_result_file(tmp_path: Path) -> None:
+    # Replays downloaded from the server leave teamRanks empty; fetch-replays writes the winner next to them.
+    replay_path = tmp_path / "2.0.0.4.2331" / "1.rep.grbr"
+    replay_path.parent.mkdir()
+    _write_replay(replay_path)
+    replay_path.write_bytes(replay_path.read_bytes().replace(b"<int>0</int><int>1</int>", b""))
+    assert parse_replay(replay_path).winner_index is None
+
+    write_result(replay_path, 2, 1, "tournament 1/1")
+
+    assert parse_replay(replay_path).winner_index == 1
+    assert export_replay_directory(tmp_path, tmp_path / "snapshots.jsonl").match_count == 1
 
 
 def _round_record(round_number: int, extra: str = "", actions: str = "") -> str:

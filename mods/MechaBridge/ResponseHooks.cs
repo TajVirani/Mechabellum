@@ -91,15 +91,31 @@ internal static class ResponseHooks
                 Page = message.Page,
                 PageCount = message.PageNum,
             };
-            var seen = new HashSet<string>();
+            // Each replay is listed once per team, under that team's slot, with that team's Win.
+            var results = new Dictionary<string, ReplayResult>();
             for (var rank = 0; rank < message.RankList.Count; rank++)
             {
-                var records = message.RankList[rank].RoundRecord;
+                var slot = message.RankList[rank];
+                var members = slot.TeamInfo?.Members;
+                var userId = members is not null && members.Count > 0 ? members[0].Userid : 0UL;
+                var records = slot.RoundRecord;
                 for (var at = 0; at < records.Count; at++)
                 {
-                    var path = records[at].ReplayPath;
-                    if (!string.IsNullOrEmpty(path) && seen.Add(path))
+                    var record = records[at];
+                    var path = record.ReplayPath;
+                    if (string.IsNullOrEmpty(path))
+                        continue;
+                    if (!results.TryGetValue(path, out var result))
+                    {
+                        result = new ReplayResult { ReplayPath = path };
+                        results.Add(path, result);
                         reply.ReplayPaths.Add(path);
+                        reply.Results.Add(result);
+                    }
+                    if (record.Win)
+                        result.WinnerUserId = userId;
+                    else
+                        result.LoserUserId = userId;
                 }
             }
             lock (Gate)

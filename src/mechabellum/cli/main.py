@@ -437,7 +437,8 @@ def _fetch_replays(args: argparse.Namespace) -> int:
         )
     print(
         f"Fetch {'failed' if summary.failed else 'complete'}: downloaded {summary.downloaded}, "
-        f"already present {summary.present}, other versions {summary.skipped_version}. Stopped: {summary.stop_reason}",
+        f"already present {summary.present}, other versions {summary.skipped_version}, "
+        f"results written {summary.labeled}. Stopped: {summary.stop_reason}",
         file=sys.stderr,
     )
     return 1 if summary.failed else 0
